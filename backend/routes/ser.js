@@ -37,7 +37,7 @@ router.post("/voice", upload.single("audio"), async (req, res) => {
         validateStatus: () => true, // IMPORTANT for debugging
     }
     );
-    console.log("ML Response", mlResponse);
+    // console.log("ML Response", mlResponse);
 
     if (typeof mlResponse.data === "string") {
     console.error("HTML returned instead of JSON");
@@ -46,7 +46,7 @@ router.post("/voice", upload.single("audio"), async (req, res) => {
     });
     }
     fs.unlinkSync(req.file.path); // cleanup
-
+    console.log("SER Result:", mlResponse.data);
 
     res.json(mlResponse.data);
   } catch (err) {

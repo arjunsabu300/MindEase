@@ -57,7 +57,9 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-const API_URL = "http://192.168.1.9:5000/api/emotion/voice";
+const API_URL_SER = "http://192.168.1.9:5000/api/emotion/voice";
+
+const API_URL_STT = "http://192.168.1.9:5000/api/emotion/voicetext";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -89,13 +91,19 @@ const startVoiceAnalysis = async () => {
         type: "audio/wav",
       });
 
-      const response = await fetch(API_URL, {
+      const response1 = await fetch(API_URL_SER, {
         method: "POST",
         body: formData,
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const result = await response.json();
+      const response2 = await fetch(API_URL_STT, {
+        method: "POST",
+        body: formData,
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const result = await response1.json();
       setCurrentMood(result.emotion);
       setLoadingSER(false);
     }, 5000);

@@ -7,6 +7,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const serRoutes = require("./routes/ser");
+const sterRoutes = require("./routes/ster");
 
 // ==================== APP SETUP ====================
 const app = express();
@@ -64,8 +65,9 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 const User = mongoose.model('User', userSchema);
 
 // ==================== ROUTES ====================
-
+app.use("/api/emotion", sterRoutes);
 app.use("/api/emotion", serRoutes);
+
 
 
 
