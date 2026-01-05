@@ -57,9 +57,9 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-const API_URL_SER = "http://192.168.1.9:5000/api/emotion/voice";
+const API_URL_SER = "http://192.168.169.43:5000/api/emotion/voice";
 
-const API_URL_STT = "http://192.168.1.9:5000/api/emotion/voicetext";
+const API_URL_STT = "http://192.168.169.43:5000/api/emotion/voicetext";
 
 const startVoiceAnalysis = async () => {
   try {
