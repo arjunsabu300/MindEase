@@ -57,9 +57,11 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-const API_URL_SER = "http://192.168.169.43:5000/api/emotion/voice";
+// const API_URL_SER = "http://192.168.169.146:5000/api/emotion/voice";
 
-const API_URL_STT = "http://192.168.169.43:5000/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.169.146:5000/api/emotion/voicetext";
+
+const API_URL_MULTI = "http://192.168.169.146:5000/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -91,20 +93,22 @@ const startVoiceAnalysis = async () => {
         type: "audio/wav",
       });
 
-      const response1 = await fetch(API_URL_SER, {
+      const response1 = await fetch(API_URL_MULTI, {
         method: "POST",
         body: formData,
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const response2 = await fetch(API_URL_STT, {
-        method: "POST",
-        body: formData,
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // const response2 = await fetch(API_URL_STT, {
+      //   method: "POST",
+      //   body: formData,
+      //   headers: { "Content-Type": "multipart/form-data" },
+      // });
 
       const result = await response1.json();
-      setCurrentMood(result.emotion);
+      console.log("Multimodal Result:", result);
+      console.log("Final Emotion:", result.final.final_emotion);
+      setCurrentMood(result.final.final_emotion);
       setLoadingSER(false);
     }, 5000);
   } catch (err) {
