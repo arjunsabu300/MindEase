@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions, SafeAreaView, ScrollView, Platform, Statu
 import { Text, Button } from "react-native-paper";
 import { Video } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Assuming v1 is a local file.
 // If v1 is a local import, usage is source={v1}
@@ -23,13 +24,23 @@ const MOCK_PLAN = [
 ];
 
 export default function YogaSessionScreen({ route, navigation }) {
-  const { yogaPlan } = route?.params || { yogaPlan: MOCK_PLAN };
+  const {
+    yogaPlan = MOCK_PLAN,
+    sessionId,
+    userId,
+    emotion,
+  } = route?.params || {};
+
+//   console.log("YogaSessionScreen params:", route?.params);
   
   // Guard clause if yogaPlan is empty
   const activePlan = yogaPlan && yogaPlan.length > 0 ? yogaPlan : MOCK_PLAN;
   
   const [index, setIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(activePlan[0].duration);
+  const [timeLeft, setTimeLeft] = useState(
+  activePlan.length > 0 ? activePlan[0].duration : 60
+);
+
 
   const pose = activePlan[index];
 
@@ -158,7 +169,17 @@ export default function YogaSessionScreen({ route, navigation }) {
             style={styles.pauseBtn}
             contentStyle={{ height: 50 }}
             labelStyle={styles.pauseBtnLabel}
-            onPress={() => navigation?.replace("Feedback")}
+            onPress={() =>
+            navigation.replace("Feedback", {
+                sessionId,
+                userId,
+                completed: false,
+                completionRatio: index / activePlan.length,
+            })
+            }
+
+
+
         >
           Pause Session
         </Button>

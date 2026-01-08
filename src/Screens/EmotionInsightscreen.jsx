@@ -2,8 +2,10 @@ import React, { useEffect, useState } from "react";
 import { View, StyleSheet, ScrollView, Image, SafeAreaView, Platform, StatusBar } from "react-native";
 import { Text, Card, Button } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_URL_YOGA = "http://192.168.1.4:5000/api/yoga/recommend";
+
+const API_URL_YOGA = "http://192.168.1.5:5000/api/yoga/recommend";
 
 // Default fallback data
 const DEFAULT_PARAMS = {
@@ -21,6 +23,9 @@ export default function EmotionInsightScreen({ route, navigation }) {
   
   const [yogaPlan, setYogaPlan] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sessionId, setSessionId] = useState(null);
+  const [userId, setUserId] = useState(null);
+
 
   // Calculate stats dynamically from the API data
   const totalDurationSec = yogaPlan.reduce((acc, curr) => acc + (curr.duration || 0), 0);
@@ -28,17 +33,26 @@ export default function EmotionInsightScreen({ route, navigation }) {
   const poseCount = yogaPlan.length;
 
   useEffect(() => {
+    loadUser();
     fetchYogaPlan();
   }, []);
-
+  const loadUser = async () => {
+    const data = await AsyncStorage.getItem("userData");
+    if (data) {
+      const user = JSON.parse(data);
+      setUserId(user.id); // ✅ THIS IS THE FIX
+    }
+  };
   const fetchYogaPlan = async () => {
     try {
+      const userData = JSON.parse(await AsyncStorage.getItem("userData"));
       console.log("Fetching yoga plan for:", emotion);
       
       const yogaRes = await fetch(API_URL_YOGA, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
+            userId: userData.id, 
             emotion, 
             userProfile: { avg_completion: 0.7 } 
         }),
@@ -47,8 +61,9 @@ export default function EmotionInsightScreen({ route, navigation }) {
       const yogaData = await yogaRes.json();
       
       // Ensure we are setting the array from the response
-      if (yogaData && yogaData.yogaPlan) {
-          setYogaPlan(yogaData.yogaPlan);
+      if (yogaData) {
+        setYogaPlan(yogaData.yogaPlan || []);
+        setSessionId(yogaData.sessionId); // ✅ store sessionId
       }
       
       setLoading(false);
@@ -157,7 +172,15 @@ const ModalityChip = ({ icon, label, percent, active }) => {
               style={styles.startBtn}
               labelStyle={styles.startBtnLabel}
               disabled={loading || yogaPlan.length === 0}
-              onPress={() => navigation.navigate("YogaSession", { yogaPlan, emotion })}
+              onPress={() =>
+                navigation.navigate("YogaSession", {
+                  yogaPlan,
+                  emotion,
+                  sessionId,
+                  userId,
+                })
+              }
+
             >
               Start Yoga Session
             </Button>

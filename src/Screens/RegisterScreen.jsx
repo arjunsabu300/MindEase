@@ -21,7 +21,7 @@ import {
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.1.4:5000/api';
+const API_BASE_URL = 'http://192.168.1.5:5000/api';
 
 const emotionalGoalsList = [
   'Stress Relief',

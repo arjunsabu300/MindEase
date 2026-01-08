@@ -11,8 +11,8 @@ const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
 // 🔁 reuse your deployed APIs
-const SER_URL = "http://192.168.1.4:5000/api/emotion/voice";      // ser.js
-const STER_URL = "http://192.168.1.4:5000/api/emotion/voicetext"; // ster.js
+const SER_URL = "http://192.168.1.5:5000/api/emotion/voice";      // ser.js
+const STER_URL = "http://192.168.1.5:5000/api/emotion/voicetext"; // ster.js
 
 router.post("/multimodal", upload.single("audio"), async (req, res) => {
   try {

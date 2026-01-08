@@ -72,7 +72,7 @@ app.use("/api/emotion", sterRoutes);
 app.use("/api/emotion", serRoutes);
 app.use("/api/emotion", multimodal);
 app.use("/api/yoga", yogaRoutes);
-app.use("/api/feedback", feedbackRoutes);
+app.use("/api/", feedbackRoutes);
 
 
 

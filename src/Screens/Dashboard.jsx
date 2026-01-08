@@ -57,11 +57,11 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-// const API_URL_SER = "http://192.168.1.4:5000/api/emotion/voice";
+// const API_URL_SER = "http://192.168.1.5:5000/api/emotion/voice";
 
-// const API_URL_STT = "http://192.168.1.4:5000/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.1.5:5000/api/emotion/voicetext";
 
-const API_URL_MULTI = "http://192.168.1.4:5000/api/emotion/multimodal";
+const API_URL_MULTI = "http://192.168.1.5:5000/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
