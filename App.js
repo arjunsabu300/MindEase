@@ -1,10 +1,16 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { Provider as PaperProvider } from 'react-native-paper';
-import LoginScreen from './src/Screens/LoginScreen';
-import RegisterScreen from './src/Screens/RegisterScreen';
-import DashboardScreen from './src/Screens/Dashboard';
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import { Provider as PaperProvider } from "react-native-paper";
+
+// Screens
+import LoginScreen from "./src/Screens/LoginScreen";
+import RegisterScreen from "./src/Screens/RegisterScreen";
+import DashboardScreen from "./src/Screens/Dashboard";
+import EmotionInsightScreen from "./src/Screens/EmotionInsightscreen";
+import YogaSessionScreen from "./src/Screens/YogaSessionScreen";
+import FeedbackScreen from "./src/Screens/Feedbackscreen";
+import YogaListScreen from "./src/Screens/Yogalistscreen";
 
 const Stack = createStackNavigator();
 
@@ -12,33 +18,75 @@ export default function App() {
   return (
     <PaperProvider>
       <NavigationContainer>
-        <Stack.Navigator 
+        <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
             headerStyle: {
-              backgroundColor: '#6200ee',
+              backgroundColor: "#FFF5EC",
+              elevation: 0,
+              shadowOpacity: 0,
             },
-            headerTintColor: '#fff',
+            headerTintColor: "#333",
             headerTitleStyle: {
-              fontWeight: 'bold',
+              fontWeight: "700",
             },
           }}
         >
-          <Stack.Screen 
-            name="Login" 
+          {/* AUTH */}
+          <Stack.Screen
+            name="Login"
             component={LoginScreen}
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="Register" 
+
+          <Stack.Screen
+            name="Register"
             component={RegisterScreen}
-            options={{ title: 'Create Account' }}
+            options={{ title: "Create Account" }}
           />
-          <Stack.Screen 
-            name="Dashboard" 
+
+          {/* MAIN */}
+          <Stack.Screen
+            name="Dashboard"
             component={DashboardScreen}
-            options={{ headerLeft: null, title: 'MindEase' }}
+            options={{
+              title: "MindEase",
+              headerLeft: () => null, // disable back
+            }}
           />
+
+          <Stack.Screen
+            name="EmotionInsight"
+            component={EmotionInsightScreen}
+            options={{
+              title: "Your Emotional Insight",
+            }}
+          />
+
+          {/* FULL SCREEN EXPERIENCE */}
+          <Stack.Screen
+            name="YogaSession"
+            component={YogaSessionScreen}
+            options={{
+              headerShown: false,
+              gestureEnabled: false, // prevent swipe-back
+            }}
+          />
+
+          <Stack.Screen
+            name="Feedback"
+            component={FeedbackScreen}
+            options={{
+              title: "Session Feedback",
+              headerLeft: () => null,
+            }}
+          />
+
+          <Stack.Screen 
+          name="YogaList" 
+          component={YogaListScreen} 
+          options={{ headerShown: false }} 
+        />
         </Stack.Navigator>
       </NavigationContainer>
     </PaperProvider>

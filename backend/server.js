@@ -9,6 +9,9 @@ require('dotenv').config();
 const serRoutes = require("./routes/ser");
 const sterRoutes = require("./routes/ster");
 const multimodal = require('./routes/multimodal')
+const yogaRoutes = require("./routes/yoga");
+const feedbackRoutes = require("./routes/session");
+
 // ==================== APP SETUP ====================
 const app = express();
 app.use(express.json());
@@ -68,6 +71,8 @@ const User = mongoose.model('User', userSchema);
 app.use("/api/emotion", sterRoutes);
 app.use("/api/emotion", serRoutes);
 app.use("/api/emotion", multimodal);
+app.use("/api/yoga", yogaRoutes);
+app.use("/api/feedback", feedbackRoutes);
 
 
 

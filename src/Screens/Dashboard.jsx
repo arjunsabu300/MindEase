@@ -57,11 +57,11 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-// const API_URL_SER = "http://192.168.169.146:5000/api/emotion/voice";
+// const API_URL_SER = "http://192.168.1.4:5000/api/emotion/voice";
 
-// const API_URL_STT = "http://192.168.169.146:5000/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.1.4:5000/api/emotion/voicetext";
 
-const API_URL_MULTI = "http://192.168.169.146:5000/api/emotion/multimodal";
+const API_URL_MULTI = "http://192.168.1.4:5000/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -110,6 +110,14 @@ const startVoiceAnalysis = async () => {
       console.log("Final Emotion:", result.final.final_emotion);
       setCurrentMood(result.final.final_emotion);
       setLoadingSER(false);
+
+      navigation.navigate("EmotionInsight", {
+        emotion: result.final.final_emotion,
+        confidence: result.final.confidence,
+        voice: result.voice,
+        text: result.text_emotion,
+        fusion: result.final,
+    });
     }, 5000);
   } catch (err) {
     setLoadingSER(false);
