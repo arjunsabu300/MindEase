@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
-const API_URL_YOGA = "http://192.168.1.5:5000/api/yoga/recommend";
+const API_URL_YOGA = "http://10.184.19.43:5000/api/yoga/recommend";
 
 // Default fallback data
 const DEFAULT_PARAMS = {

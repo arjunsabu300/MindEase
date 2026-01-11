@@ -28,8 +28,15 @@
       },
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO"
-      ]
+        "RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.mindease"
     },
     "web": {
       "favicon": "./assets/favicon.png"
