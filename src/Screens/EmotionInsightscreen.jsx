@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
-const API_URL_YOGA = "http://10.184.19.43:5000/api/yoga/recommend";
+const API_URL_YOGA = "http://192.168.1.47:5000/api/yoga/recommend";
 
 // Default fallback data
 const DEFAULT_PARAMS = {
@@ -20,6 +20,10 @@ export default function EmotionInsightScreen({ route, navigation }) {
   // Safe destructuring
   const { emotion, confidence, voice, text } = route?.params || DEFAULT_PARAMS;
   console.log(voice, text);
+
+  const safeVoice = voice || { emotion: "neutral", confidence: 0.5 };
+  const safeText = text || { emotion: "neutral", confidence: 0.5 };
+
   
   const [yogaPlan, setYogaPlan] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -135,10 +139,31 @@ const ModalityChip = ({ icon, label, percent, active }) => {
 
           {/* Modalities Row */}
           <View style={styles.modalitiesRow}>
-            <ModalityChip icon="camera-outline" label="F" percent={88} />
-            <ModalityChip icon="microphone-outline" label="V" percent={voice.confidence} />
-            <ModalityChip icon="format-text" label="T" percent={text.confidence} active={true} />
-          </View>
+          {/* FACE */}
+          <ModalityChip 
+            icon="camera-outline" 
+            label="F" 
+            percent={confidence}        // real face confidence (when source = face)
+            active={route?.params?.source === "face"} 
+          />
+
+          {/* VOICE */}
+          <ModalityChip 
+            icon="microphone-outline" 
+            label="V" 
+            percent={safeVoice.confidence} 
+            active={route?.params?.source === "voice"} 
+          />
+
+          {/* TEXT */}
+          <ModalityChip 
+            icon="format-text" 
+            label="T" 
+            percent={safeText.confidence} 
+            active={route?.params?.source === "text"} 
+          />
+        </View>
+
         </Card>
 
         {/* Suggested Routine Section */}

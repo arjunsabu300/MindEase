@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
 import {
   View,
   StyleSheet,
@@ -27,6 +28,8 @@ const DashboardScreen = ({ navigation }) => {
   const [userData, setUserData] = useState(null);
   const [currentMood, setCurrentMood] = useState("calm");
   const [loadingSER, setLoadingSER] = useState(false);
+  const [loadingFER, setLoadingFER] = useState(false);
+
 
   useEffect(() => {
     loadUserData();
@@ -57,11 +60,11 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-// const API_URL_SER = "http://10.184.19.43:5000/api/emotion/voice";
+// const API_URL_SER = "http://192.168.1.47:5000/api/emotion/voice";
 
-// const API_URL_STT = "http://10.184.19.43:5000/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.1.47:5000/api/emotion/voicetext";
 
-const API_URL_MULTI = "http://10.184.19.43:5000/api/emotion/multimodal";
+const API_URL_MULTI = "http://192.168.1.47:5000/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -126,6 +129,72 @@ const startVoiceAnalysis = async () => {
 };
 
 
+  /* ===================== FER ===================== */
+
+const API_URL_FACE = "http://192.168.1.47:5000/api/emotion/face";
+
+
+/* ===================== FACE ANALYSIS (FER) ===================== */
+const startFaceAnalysis = async () => {
+  try {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Denied", "Gallery access required.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (result.canceled) return;
+
+    setLoadingFER(true);
+    const imageUri = result.assets[0].uri;
+
+    const formData = new FormData();
+    formData.append("image", {
+      uri: imageUri,
+      name: "face.jpg",
+      type: "image/jpeg",
+    });
+
+    const response = await fetch(API_URL_FACE, {
+      method: "POST",
+      body: formData,
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    const data = await response.json();
+
+    setLoadingFER(false);
+
+    if (!response.ok) {
+      Alert.alert("Face Error", data.error || "Unknown error");
+      return;
+    }
+
+    navigation.navigate("EmotionInsight", {
+      emotion: data.label,                  // 🌟 REAL AI OUTPUT
+      confidence: data.score ?? 0.9,        // safe fallback
+      voice: { emotion: "neutral", confidence: 0.5 }, // static
+      text: { emotion: "neutral", confidence: 0.5 },  // static
+      source: "face",
+    });
+
+  } catch (err) {
+    setLoadingFER(false);
+    console.error("Analysis Error:", err);
+    Alert.alert("Error", err.message);
+  }
+};
+
+
 
   /* ===================== UI ===================== */
 
@@ -144,8 +213,11 @@ const startVoiceAnalysis = async () => {
       icon: "face-recognition",
       description: "Detect emotions from facial expressions",
       color: "#4CAF50",
-      comingSoon: true,
+      comingSoon: false,
+      onPress: startFaceAnalysis,
     },
+
+
     {
       title: "Voice Analysis",
       icon: "microphone",
@@ -264,6 +336,11 @@ const startVoiceAnalysis = async () => {
                     {!a.comingSoon && loadingSER && a.title === "Voice Analysis" && (
                       <ActivityIndicator size="small" />
                     )}
+                    {/* Loading indicator for Face Analysis */}
+                    {!a.comingSoon && loadingFER && a.title === "Face Analysis" && (
+                      <ActivityIndicator size="small" />
+                    )}
+
                   </Card.Content>
                 </Card>
               ))}

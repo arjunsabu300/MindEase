@@ -11,6 +11,7 @@ const sterRoutes = require("./routes/ster");
 const multimodal = require('./routes/multimodal')
 const yogaRoutes = require("./routes/yoga");
 const feedbackRoutes = require("./routes/session");
+const faceRoutes = require("./routes/face");
 
 // ==================== APP SETUP ====================
 const app = express();
@@ -73,6 +74,7 @@ app.use("/api/emotion", serRoutes);
 app.use("/api/emotion", multimodal);
 app.use("/api/yoga", yogaRoutes);
 app.use("/api/", feedbackRoutes);
+app.use("/api/emotion", faceRoutes);
 
 
 

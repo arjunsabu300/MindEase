@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Alert } from "react-native";
 import { Text, Button, Title } from "react-native-paper";
 
-const API_URL_FEEDBACK = "http://10.184.19.43:5000/api/feedback";
+const API_URL_FEEDBACK = "http://192.168.1.47:5000/api/feedback";
 
 export default function FeedbackScreen({ route, navigation }) {
   const { sessionId, userId, completed, completionRatio } = route.params;
