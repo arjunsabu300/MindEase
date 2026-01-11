@@ -29,6 +29,8 @@ router.post("/face", upload.single("image"), async (req, res) => {
     fs.unlinkSync(req.file.path);
 
     if (response.data?.emotion) {
+      console.log("🎭 FER Emotion:", emotion);
+      console.log("📊 FER Confidence:", confidence);
       return res.json({
         label: response.data.emotion,
         score: response.data.confidence,

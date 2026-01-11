@@ -11,6 +11,8 @@ import EmotionInsightScreen from "./src/Screens/EmotionInsightscreen";
 import YogaSessionScreen from "./src/Screens/YogaSessionScreen";
 import FeedbackScreen from "./src/Screens/Feedbackscreen";
 import YogaListScreen from "./src/Screens/Yogalistscreen";
+import VideoEmotion from "./src/Screens/VideoEmotion";
+
 
 const Stack = createStackNavigator();
 
@@ -87,6 +89,12 @@ export default function App() {
           component={YogaListScreen} 
           options={{ headerShown: false }} 
         />
+          <Stack.Screen 
+            name="VideoEmotion" 
+            component={VideoEmotion} 
+            options={{ headerShown: false }} 
+          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </PaperProvider>
