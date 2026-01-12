@@ -30,6 +30,20 @@ export default function EmotionInsightScreen({ route, navigation }) {
   const [sessionId, setSessionId] = useState(null);
   const [userId, setUserId] = useState(null);
 
+  const EMOJI_MAP = {
+    happy: "😊",
+    sad: "😢",
+    angry: "😠",
+    fear: "😨",
+    fearful: "😨",
+    stressed: "😰",
+    anxious: "😰",
+    neutral: "😐",
+    calm: "😌",
+    surprise: "😲",
+  };
+
+
 
   // Calculate stats dynamically from the API data
   const totalDurationSec = yogaPlan.reduce((acc, curr) => acc + (curr.duration || 0), 0);
@@ -116,7 +130,7 @@ const ModalityChip = ({ icon, label, percent, active }) => {
           <View style={styles.emotionHeader}>
             <View style={styles.emojiContainer}>
               <Text style={styles.emoji}>
-                {emotion === "Stressed" ? "😰" : emotion === "Happy" ? "😊" : "😐"}
+                {EMOJI_MAP[normalizedEmotion] ?? "😐"}
               </Text>
             </View>
             <View style={styles.emotionTextContainer}>
