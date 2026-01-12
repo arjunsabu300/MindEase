@@ -27,6 +27,7 @@ router.post("/face", upload.single("image"), async (req, res) => {
     });
 
     fs.unlinkSync(req.file.path);
+    console.log("FER Response:", response.data);
 
     if (response.data?.emotion) {
       return res.json({

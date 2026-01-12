@@ -19,80 +19,90 @@ const ML_SERVER_URL =
 
 
 router.post("/voicetext", upload.single("audio"), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: "No audio file uploaded" });
-        }
-        const audioFormData = () => {
-            const fd = new FormData();
-            fd.append(
-                "file",
-                fs.createReadStream(req.file.path),
-                "voice.wav"
-            );
-            return fd;
-        };
-        const sttResponse = await axios.post(
-            STT_ML_URL,
-            audioFormData(),
-            {
-                headers: { ...audioFormData().getHeaders() },
-                timeout: 60000,
-                validateStatus: () => true,
-            }
-        );
+  let audioPath;
 
-        if (typeof sttResponse.data === "string" && sttResponse.data.startsWith("<!DOCTYPE html>")) {
-            fs.unlinkSync(req.file.path);
-            return res.status(502).json({
-                error: "STT ML returned HTML",
-            });
-        }
-
-        const text = sttResponse.data.text;
-        if (!text || text.trim().length === 0) {
-            fs.unlinkSync(req.file.path);
-            return res.status(400).json({
-                error: "Empty textion",
-            });
-        }
-        console.log("text:", text);
-        fs.unlinkSync(req.file.path); // cleanup
-
-        if (!text || text.trim().length === 0) {
-            return res.status(400).json({ error: "Text is required" });
-        }
-
-        const mlResponse = await axios.post(
-            ML_SERVER_URL,
-            { text },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                timeout: 30000,
-                validateStatus: () => true, // IMPORTANT for debugging
-            }
-        );
-
-        console.log("ML Response:", mlResponse.data);
-
-        // If HF Space returns HTML (Space sleeping or wrong method)
-        if (typeof mlResponse.data === "string") {
-            console.error("HTML returned instead of JSON");
-            return res.status(502).json({
-                error: "ML endpoint returned HTML (Space sleeping or wrong method)",
-            });
-        }
-
-        res.json(mlResponse.data);
-
-
-    } catch (error) {
-        console.error("Error processing audio:", error);
-        res.status(500).json({ error: "Failed to process audio" });
+  try {
+    /* ===================== VALIDATION ===================== */
+    if (!req.file) {
+      return res.status(400).json({ error: "No audio file uploaded" });
     }
+
+    audioPath = req.file.path;
+
+    /* ===================== STT ===================== */
+    const sttForm = new FormData();
+    sttForm.append(
+      "file",
+      fs.createReadStream(audioPath),
+      "voice.wav"
+    );
+
+    const sttResponse = await axios.post(
+      STT_ML_URL,
+      sttForm,
+      {
+        headers: sttForm.getHeaders(),
+        timeout: 60000,
+        validateStatus: () => true,
+      }
+    );
+
+    // HF Space sleeping / HTML response
+    if (typeof sttResponse.data === "string") {
+      return res.status(502).json({
+        error: "STT endpoint returned HTML (Space sleeping or wrong method)",
+      });
+    }
+
+    const text = sttResponse.data?.text?.trim();
+    if (!text) {
+      return res.status(400).json({
+        error: "STT produced empty text",
+      });
+    }
+
+    console.log("🎤 Transcribed text:", text);
+
+    /* ===================== TEXT EMOTION ===================== */
+    const emotionResponse = await axios.post(
+      ML_SERVER_URL,
+      { text },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        timeout: 30000,
+        validateStatus: () => true,
+      }
+    );
+
+    if (typeof emotionResponse.data === "string") {
+      return res.status(502).json({
+        error: "Text emotion endpoint returned HTML",
+      });
+    }
+
+    console.log("🧠 Text Emotion Result:", emotionResponse.data);
+
+    /* ===================== FINAL RESPONSE ===================== */
+    return res.json({
+      text,
+      emotion: emotionResponse.data.emotion,
+      confidence: emotionResponse.data.confidence,
+    });
+
+  } catch (err) {
+    console.error("❌ VoiceText Error:", err.message);
+    return res.status(500).json({ error: "Voice-to-text processing failed" });
+
+  } finally {
+    /* ===================== SAFE CLEANUP ===================== */
+    if (audioPath && fs.existsSync(audioPath)) {
+      fs.unlinkSync(audioPath);
+    }
+  }
 });
+
 
 module.exports = router;

@@ -29,6 +29,12 @@ const DashboardScreen = ({ navigation }) => {
   const [currentMood, setCurrentMood] = useState("calm");
   const [loadingSER, setLoadingSER] = useState(false);
   const [loadingFER, setLoadingFER] = useState(false);
+  const [faceImage, setFaceImage] = useState(null);
+  const [faceResult, setFaceResult] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const recordingRef = React.useRef(null);
+
+
 
 
   useEffect(() => {
@@ -60,78 +66,154 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-// const API_URL_SER = "http://192.168.1.47:5000/api/emotion/voice";
+// const API_URL_SER = "http://192.168.1.5:5000/api/emotion/voice";
 
-// const API_URL_STT = "http://192.168.1.47:5000/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.1.5:5000/api/emotion/voicetext";
 
-const API_URL_MULTI = "http://192.168.1.47:5000/api/emotion/multimodal";
+const API_URL_MULTI = "http://192.168.1.5:5000/api/emotion/multimodal";
 
-const startVoiceAnalysis = async () => {
+
+const cleanupRecording = async () => {
   try {
-    setLoadingSER(true);
-
-    const permission = await Audio.requestPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission Required", "Microphone access needed");
-      setLoadingSER(false);
-      return;
+    if (recordingRef.current) {
+      const status = await recordingRef.current.getStatusAsync();
+      if (status?.isRecording) {
+        await recordingRef.current.stopAndUnloadAsync();
+      }
     }
-
-    const recording = new Audio.Recording();
-    await recording.prepareToRecordAsync(
-      Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
-    );
-    await recording.startAsync();
-
-    Alert.alert("Recording", "Please speak for 5 seconds");
-
-    setTimeout(async () => {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-
-      const formData = new FormData();
-      formData.append("audio", {
-        uri,
-        name: "voice.wav",
-        type: "audio/wav",
-      });
-
-      const response1 = await fetch(API_URL_MULTI, {
-        method: "POST",
-        body: formData,
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      // const response2 = await fetch(API_URL_STT, {
-      //   method: "POST",
-      //   body: formData,
-      //   headers: { "Content-Type": "multipart/form-data" },
-      // });
-
-      const result = await response1.json();
-      console.log("Multimodal Result:", result);
-      console.log("Final Emotion:", result.final.final_emotion);
-      setCurrentMood(result.final.final_emotion);
-      setLoadingSER(false);
-
-      navigation.navigate("EmotionInsight", {
-        emotion: result.final.final_emotion,
-        confidence: result.final.confidence,
-        voice: result.voice,
-        text: result.text_emotion,
-        fusion: result.final,
-    });
-    }, 5000);
-  } catch (err) {
-    setLoadingSER(false);
-    Alert.alert("Error", err.message);
+  } catch (e) {
+    console.warn("Recording cleanup skipped:", e.message);
+  } finally {
+    recordingRef.current = null;
   }
 };
 
 
+
+const startVoiceAnalysis = async () => {
+  if (!faceImage) {
+    Alert.alert("Face Required", "Please upload your face image first");
+    return;
+  }
+
+  if (isRecording) return;
+
+  try {
+    setIsRecording(true);
+    setLoadingSER(true);
+
+    /* 🧹 HARD CLEANUP FIRST */
+    await cleanupRecording();
+
+    /* 🔊 AUDIO MODE */
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    });
+
+    const { granted } = await Audio.requestPermissionsAsync();
+    if (!granted) throw new Error("Microphone permission denied");
+
+    /* 🎙️ CREATE SINGLE RECORDING */
+    const recording = new Audio.Recording();
+    recordingRef.current = recording;
+
+    await recording.prepareToRecordAsync({
+      android: {
+        extension: ".wav",
+        outputFormat:
+          Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_PCM_16BIT,
+        audioEncoder:
+          Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_PCM_16BIT,
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        bitRate: 256000,
+      },
+      ios: {
+        extension: ".wav",
+        audioQuality:
+          Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        bitRate: 256000,
+        linearPCMBitDepth: 16,
+        linearPCMIsBigEndian: false,
+        linearPCMIsFloat: false,
+      },
+    });
+
+    await recording.startAsync();
+    console.log("🎙️ Recording started");
+
+    setTimeout(async () => {
+      try {
+        await recording.stopAndUnloadAsync();
+        recordingRef.current = null;
+
+        const audioUri = recording.getURI();
+        if (!audioUri) throw new Error("Audio recording failed");
+
+        const formData = new FormData();
+        formData.append("audio", {
+          uri: audioUri,
+          name: "voice.wav",
+          type: "audio/wav",
+        });
+        formData.append("image", {
+          uri: faceImage,
+          name: "face.jpg",
+          type: "image/jpeg",
+        });
+
+        const response = await fetch(API_URL_MULTI, {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result?.final) {
+          throw new Error("Fusion failed");
+        }
+
+        setCurrentMood(result.final.final_emotion);
+
+        navigation.navigate("EmotionInsight", {
+          emotion: result.final.final_emotion,
+          confidence: result.final.confidence,
+          voice: result.voice,
+          text: result.text_emotion,
+          face: result.face_emotion,
+          fusion: result.final,
+          source: "fusion",
+        });
+
+      } catch (err) {
+        Alert.alert("Analysis Error", err.message);
+      } finally {
+        setLoadingSER(false);
+        setIsRecording(false);
+      }
+    }, 5000);
+
+  } catch (err) {
+    console.error("🎤 Voice error:", err.message);
+    await cleanupRecording();
+    setLoadingSER(false);
+    setIsRecording(false);
+    Alert.alert("Voice Error", err.message);
+  }
+};
+
+
+
+
+
+
   /* ===================== FER ===================== */
 
-const API_URL_FACE = "http://192.168.1.47:5000/api/emotion/face";
+const API_URL_FACE = "http://192.168.1.5:5000/api/emotion/face";
 
 
 /* ===================== FACE ANALYSIS (FER) ===================== */
@@ -155,44 +237,19 @@ const startFaceAnalysis = async () => {
     setLoadingFER(true);
     const imageUri = result.assets[0].uri;
 
-    const formData = new FormData();
-    formData.append("image", {
-      uri: imageUri,
-      name: "face.jpg",
-      type: "image/jpeg",
-    });
-
-    const response = await fetch(API_URL_FACE, {
-      method: "POST",
-      body: formData,
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    const data = await response.json();
+    // ✅ STORE IMAGE ONLY
+    setFaceImage(imageUri);
 
     setLoadingFER(false);
-
-    if (!response.ok) {
-      Alert.alert("Face Error", data.error || "Unknown error");
-      return;
-    }
-
-    navigation.navigate("EmotionInsight", {
-      emotion: data.label,                  // 🌟 REAL AI OUTPUT
-      confidence: data.score ?? 0.9,        // safe fallback
-      voice: { emotion: "neutral", confidence: 0.5 }, // static
-      text: { emotion: "neutral", confidence: 0.5 },  // static
-      source: "face",
-    });
+    Alert.alert("Face Captured", "Now tap Voice Analysis and speak");
 
   } catch (err) {
     setLoadingFER(false);
-    console.error("Analysis Error:", err);
-    Alert.alert("Error", err.message);
+    Alert.alert("Face Error", err.message);
   }
 };
+
+
 
 
 

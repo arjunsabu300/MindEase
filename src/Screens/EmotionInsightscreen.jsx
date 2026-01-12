@@ -5,30 +5,72 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
-const API_URL_YOGA = "http://192.168.1.47:5000/api/yoga/recommend";
+const API_URL_YOGA = "http://192.168.1.5:5000/api/yoga/recommend";
 
 // Default fallback data
-const DEFAULT_PARAMS = {
-  emotion: "Stressed",
-  confidence: 0.85,
-  voice: { emotion: "Neutral", confidence: 0.79 },
-  text: { emotion: "Sad", confidence: 0.72 },
-  fusion: true
-};
+// const DEFAULT_PARAMS = {
+//   emotion: "Stressed",
+//   confidence: 0.85,
+//   voice: { emotion: "Neutral", confidence: 0.79 },
+//   text: { emotion: "Sad", confidence: 0.72 },
+//   fusion: true
+// };
 
 export default function EmotionInsightScreen({ route, navigation }) {
-  // Safe destructuring
-  const { emotion, confidence, voice, text } = route?.params || DEFAULT_PARAMS;
-  console.log(voice, text);
 
-  const safeVoice = voice || { emotion: "neutral", confidence: 0.5 };
-  const safeText = text || { emotion: "neutral", confidence: 0.5 };
+  const params = route?.params;
+
+  useEffect(() => {
+    if (!params || !params.fusion) {
+      console.warn("🚫 EmotionInsight opened without fusion. Blocking.");
+      navigation.replace("Dashboard");
+    }
+  }, []);
+
+  if (!params || !params.fusion) {
+    return null; // ⛔ HARD STOP RENDER
+  }
+  // Safe destructuring
+  // const { emotion, confidence, voice, text, face } = route?.params || DEFAULT_PARAMS;
+
+    const {
+    emotion,
+    confidence,
+    voice,
+    text,
+    face,
+    fusion
+  } = params;
+
+  const safeVoice = voice ?? { emotion: "neutral", confidence: 0 };
+  const safeText  = text  ?? { emotion: "neutral", confidence: 0 };
+  const safeFace  = face  ?? { emotion: "neutral", confidence: 0 };
+
+  console.log(voice, text, face);
+
+  // const safeVoice = voice || { emotion: "neutral", confidence: 0.5 };
+  // const safeText = text || { emotion: "neutral", confidence: 0.5 };
+  // const safeFace = face || { emotion: "neutral", confidence: 0.5 };
 
   
   const [yogaPlan, setYogaPlan] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState(null);
   const [userId, setUserId] = useState(null);
+
+  const EMOJI_MAP = {
+    happy: "😊",
+    sad: "😢",
+    angry: "😠",
+    fear: "😨",
+    fearful: "😨",
+    stressed: "😰",
+    anxious: "😰",
+    neutral: "😐",
+    calm: "😌",
+    surprise: "😲",
+  };
+
 
 
   // Calculate stats dynamically from the API data
@@ -37,9 +79,11 @@ export default function EmotionInsightScreen({ route, navigation }) {
   const poseCount = yogaPlan.length;
 
   useEffect(() => {
+    if (!params?.fusion) return;
     loadUser();
     fetchYogaPlan();
   }, []);
+
   const loadUser = async () => {
     const data = await AsyncStorage.getItem("userData");
     if (data) {
@@ -79,6 +123,8 @@ export default function EmotionInsightScreen({ route, navigation }) {
     }
   };
 
+const normalizedEmotion = (emotion || "neutral").toLowerCase();
+
 const ModalityChip = ({ icon, label, percent, active }) => {
   // Convert to percentage with 2 decimal places
   const formattedPercent = (percent * 100).toFixed(2);
@@ -116,7 +162,7 @@ const ModalityChip = ({ icon, label, percent, active }) => {
           <View style={styles.emotionHeader}>
             <View style={styles.emojiContainer}>
               <Text style={styles.emoji}>
-                {emotion === "Stressed" ? "😰" : emotion === "Happy" ? "😊" : "😐"}
+                {EMOJI_MAP[normalizedEmotion] ?? "😐"}
               </Text>
             </View>
             <View style={styles.emotionTextContainer}>
@@ -143,7 +189,7 @@ const ModalityChip = ({ icon, label, percent, active }) => {
           <ModalityChip 
             icon="camera-outline" 
             label="F" 
-            percent={confidence}        // real face confidence (when source = face)
+            percent={safeFace.confidence}        // real face confidence (when source = face)
             active={route?.params?.source === "face"} 
           />
 
