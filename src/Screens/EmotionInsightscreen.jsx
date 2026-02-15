@@ -93,6 +93,9 @@ export default function EmotionInsightScreen({ route, navigation }) {
     }
   };
 
+  
+const normalizedEmotion = (emotion || "neutral").toLowerCase();
+
 const ModalityChip = ({ icon, label, percent, active }) => {
   // Convert to percentage with 2 decimal places
   const formattedPercent = (percent * 100).toFixed(2);
