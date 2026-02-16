@@ -60,11 +60,11 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-// const API_URL_SER = "http://10.184.19.43:5000/api/emotion/voice";
+// const API_URL_SER = "http://192.168.1.34:5000/api/emotion/voice";
 
-// const API_URL_STT = "http://10.184.19.43:5000/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.1.34:5000/api/emotion/voicetext";
 
-const API_URL_MULTI = "http://10.184.19.43:5000/api/emotion/multimodal";
+const API_URL_MULTI = "http://192.168.1.34:5000/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -131,7 +131,7 @@ const startVoiceAnalysis = async () => {
 
   /* ===================== FER ===================== */
 
-const API_URL_FACE = "http://10.184.19.43:5000/api/emotion/face";
+const API_URL_FACE = "http://192.168.1.34:5000/api/emotion/face";
 
 
 /* ===================== FACE ANALYSIS (FER) ===================== */
@@ -207,48 +207,60 @@ const startFaceAnalysis = async () => {
     neutral: "emoticon-neutral",
   };
 
+  // Old DB with separte for voice,face,text
+  // const quickActions = [
+  //   {
+  //     title: "Detect Emotion",
+  //     icon: "video",
+  //     description: "Analyze both face and voice from video",
+  //     color: "#673AB7",
+  //     comingSoon: false,
+  //     onPress: () => navigation.navigate("VideoEmotion"),
+  //   },
+  //   {
+  //     title: "Face Analysis",
+  //     icon: "face-recognition",
+  //     description: "Detect emotions from facial expressions",
+  //     color: "#4CAF50",
+  //     comingSoon: false,
+  //     onPress: startFaceAnalysis,
+  //   },
+
+
+  //   {
+  //     title: "Voice Analysis",
+  //     icon: "microphone",
+  //     description: "Analyze emotions from your voice",
+  //     color: "#2196F3",
+  //     comingSoon: false,
+  //     onPress: startVoiceAnalysis,
+  //   },
+  //   {
+  //     title: "Text Analysis",
+  //     icon: "text-box",
+  //     description: "Understand emotions from text",
+  //     color: "#FF9800",
+  //     comingSoon: true,
+  //   },
+  //   {
+  //     title: "EQ Test",
+  //     icon: "clipboard-text",
+  //     description: "Assess emotional intelligence",
+  //     color: "#9C27B0",
+  //     comingSoon: true,
+  //   },
+  // ];
   const quickActions = [
-    {
-      title: "Detect Emotion",
-      icon: "video",
-      description: "Analyze both face and voice from video",
-      color: "#673AB7",
-      comingSoon: false,
-      onPress: () => navigation.navigate("VideoEmotion"),
-    },
-    {
-      title: "Face Analysis",
-      icon: "face-recognition",
-      description: "Detect emotions from facial expressions",
-      color: "#4CAF50",
-      comingSoon: false,
-      onPress: startFaceAnalysis,
-    },
+  {
+    title: "Detect Emotion",
+    icon: "video",
+    description: "Upload a video to analyze face, voice, and text emotion",
+    color: "#673AB7",
+    comingSoon: false,
+    onPress: () => navigation.navigate("VideoEmotion"),
+  },
+];
 
-
-    {
-      title: "Voice Analysis",
-      icon: "microphone",
-      description: "Analyze emotions from your voice",
-      color: "#2196F3",
-      comingSoon: false,
-      onPress: startVoiceAnalysis,
-    },
-    {
-      title: "Text Analysis",
-      icon: "text-box",
-      description: "Understand emotions from text",
-      color: "#FF9800",
-      comingSoon: true,
-    },
-    {
-      title: "EQ Test",
-      icon: "clipboard-text",
-      description: "Assess emotional intelligence",
-      color: "#9C27B0",
-      comingSoon: true,
-    },
-  ];
 
   if (!userData) {
     return (
@@ -315,23 +327,23 @@ const startFaceAnalysis = async () => {
               {quickActions.map((a, i) => (
                 <Card
                   key={i}
-                  style={[styles.actionCard, { borderLeftColor: a.color }]}
-                  onPress={
-                    a.comingSoon
-                      ? () =>
-                          Alert.alert(
-                            "Coming Soon",
-                            `${a.title} will be available soon`
-                          )
-                      : a.onPress
-                  }
+                  style={styles.actionCard}
+                  onPress={a.onPress}
                 >
+                  <LinearGradient
+                    colors={["#667eea", "#764ba2"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientCard}
+                  >
                   <Card.Content style={styles.actionContent}>
+
                     <IconButton
                       icon={a.icon}
-                      iconColor={a.color}
-                      size={28}
+                      iconColor="white"
+                      size={48}
                     />
+
                     <Text style={styles.actionTitle}>{a.title}</Text>
                     <Text style={styles.actionDesc}>{a.description}</Text>
 
@@ -350,6 +362,7 @@ const startFaceAnalysis = async () => {
                     )}
 
                   </Card.Content>
+                  </LinearGradient>
                 </Card>
               ))}
             </View>
@@ -408,31 +421,60 @@ const styles = StyleSheet.create({
 
   subtitle: { color: "#666", marginTop: 4 },
 
-  sectionTitle: { marginBottom: 12, fontWeight: "700" },
+  sectionTitle: {
+  marginBottom: 18,
+  fontWeight: "700",
+  textAlign: "center",
+  fontSize: 20,
+},
+
 
   actionsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
+  justifyContent: "center",
+  alignItems: "center",
+},
+
+
 
   actionCard: {
-    width: (width - 48) / 2,
-    borderRadius: 14,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-  },
+  width: width * 0.85,
+  borderRadius: 22,
+  elevation: 8,
+  backgroundColor: "transparent",
+  
+},
+
+
 
   actionContent: { alignItems: "center" },
 
-  actionTitle: { fontWeight: "700", marginTop: 4 },
+  actionTitle: {
+  fontWeight: "700",
+  marginTop: 8,
+  fontSize: 20,
+  textAlign: "center",
+  color: "white",
+},
+
 
   actionDesc: {
-    fontSize: 12,
-    color: "#666",
-    textAlign: "center",
-    marginVertical: 6,
-  },
+  fontSize: 14,
+  color: "rgba(255,255,255,0.9)",
+  textAlign: "center",
+  marginTop: 6,
+},
+
+  gradientCard: {
+  borderRadius: 22,
+  paddingVertical: 30,
+  alignItems: "center",
+
+  shadowColor: "#764ba2",
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.3,
+  shadowRadius: 10,
+},
+
 
   soonChip: {
     marginTop: 6,

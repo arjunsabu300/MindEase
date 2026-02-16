@@ -21,6 +21,7 @@
     "expo-constants": "~18.0.12",
     "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.8",
+    "lucide-react-native": "^0.564.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "^2.12.0",
