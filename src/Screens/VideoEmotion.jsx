@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Text, TouchableOpacity } from 'react-native';
 import { Upload, Camera } from 'lucide-react-native';
 
-const API_URL_VIDEO = "http://192.168.1.34:5000/api/emotion/video";
+const API_URL_VIDEO = "http://192.168.1.36:5000/api/emotion/video";
 
 export default function VideoEmotion({ navigation }) {
 
@@ -75,15 +75,37 @@ export default function VideoEmotion({ navigation }) {
 
     setLoading(false);
     // Handle the new response structure from multimodal
-    navigation.navigate("EmotionInsight", {
-      emotion: data.finalEmotion || data.emotion,
-      confidence: data.confidence,
-      voice: data.voice,
-      text: data.text, // This is text_emotion from multimodal
+    // CHECK CONFLICT
+    if (data.status === "conflict") {
+
+      navigation.navigate("Questionnaire", {
+
+      questions: data.fusion.questions,
+      questionSessionId: data.fusion.questionSessionId,
+
+      candidates: data.candidates, // optional
       face: data.face,
-      fusion: data.fusion || data,
-      source: "video",
-    });
+      voice: data.voice,
+      text: data.text
+
+      });
+
+    } else {
+
+      navigation.navigate("EmotionInsight", {
+
+        emotion: data.finalEmotion,
+        confidence: data.confidence,
+        voice: data.voice,
+        text: data.text,
+        face: data.face,
+        fusion: data.fusion,
+        source: "video",
+
+      });
+
+    }
+
   } catch (err) {
     setLoading(false);
     Alert.alert("Error", err.message);

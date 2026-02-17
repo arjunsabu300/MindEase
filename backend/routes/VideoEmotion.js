@@ -24,7 +24,7 @@ const upload = multer({
   }
 });
 
-const MULTIMODAL_URL = "http://192.168.1.34:5000/api/emotion/multimodal"; // Adjust port if needed
+const MULTIMODAL_URL = "http://192.168.1.36:5000/api/emotion/multimodal"; // Adjust port if needed
 
 const FRAME_TIMES = ["0.5", "1", "1.5", "2.2", "3"];
 
@@ -139,14 +139,30 @@ router.post("/video", upload.single("video"), async (req, res) => {
       timeout: 60000,
     });
 
-    const result = {
+
+
+    const fusion = multimodalRes.data.final;
+
+    let result = {
       face: multimodalRes.data.face,
       voice: multimodalRes.data.voice,
       text: multimodalRes.data.text_emotion,
-      finalEmotion: multimodalRes.data.final?.emotion || multimodalRes.data.face?.emotion,
-      confidence: multimodalRes.data.final?.confidence || multimodalRes.data.face?.confidence,
-      fusion: multimodalRes.data.final
+      fusion: fusion
     };
+
+    // Only set finalEmotion if NO conflict
+    if (fusion?.source !== "llm_required") {
+
+      result.finalEmotion = fusion?.final_emotion;
+      result.confidence = fusion?.confidence;
+
+    } else {
+
+      result.status = "conflict";
+      result.candidates = fusion?.candidates;
+
+    }
+
 
     console.log("Video processing completed successfully");
 

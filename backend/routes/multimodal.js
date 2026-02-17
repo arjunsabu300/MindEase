@@ -5,6 +5,8 @@ const fs = require("fs");
 const FormData = require("form-data");
 const { fuseEmotions } = require("../utils/fusion");
 const { normalizeEmotion } = require("../utils/emotionMap");
+const { generateQuestions } = require("../utils/llmQuestions");
+
 
 const router = express.Router();
 
@@ -15,8 +17,8 @@ const upload = multer({ dest: "uploads/" }).fields([
 ]);
 
 // MODEL URLS
-const SER_URL  = "http://192.168.1.34:5000/api/emotion/voice";
-const STT_URL  = "http://192.168.1.34:5000/api/emotion/voicetext";
+const SER_URL  = "http://192.168.1.36:5000/api/emotion/voice";
+const STT_URL  = "http://192.168.1.36:5000/api/emotion/voicetext";
 const FER_URL  = "https://aceblade33-face-emotion-api-docker.hf.space/predict";
 
 router.post("/multimodal", upload, async (req, res) => {
@@ -101,11 +103,58 @@ router.post("/multimodal", upload, async (req, res) => {
        3️⃣ FUSION (face + voice + text)
     --------------------------------------------------- */
 
-    const final = fuseEmotions({
+    // const final = fuseEmotions({
+    //   voice,
+    //   text: textEmotion,
+    //   face
+    // });
+
+     /* ---------------------------------------------------
+       3️⃣ LLM + FUSION (face + voice + text) (If no difference of outputs calls fusion else llm)
+    --------------------------------------------------- */
+    /* ---------------------------------------------------
+   3️⃣ CHECK CONFLICT → CALL LLM IF NEEDED
+--------------------------------------------------- */
+
+  let final = null;
+
+  // Collect available emotions
+  const emotions = [];
+
+  if (face?.emotion) emotions.push(face.emotion);
+  if (voice?.emotion) emotions.push(voice.emotion);
+  if (textEmotion?.emotion) emotions.push(textEmotion.emotion);
+
+  // Get unique emotions
+  const uniqueEmotions = [...new Set(emotions)];
+
+  const allDifferent = uniqueEmotions.length === emotions.length && emotions.length > 1;
+
+  if (allDifferent) {
+
+    console.log("Conflict detected. Calling LLM...");
+
+    const llmResult = await generateQuestions(uniqueEmotions);
+
+    final = {
+      source: "llm_required",
+      questionSessionId: llmResult.questionSessionId,
+      questions: llmResult.questions,
+      candidates: uniqueEmotions
+};
+  } else {
+
+    console.log("No conflict. Using fusion.");
+
+    final = fuseEmotions({
       voice,
       text: textEmotion,
       face
     });
+
+  }``
+
+
 
     /* ---------------------------------------------------
        4️⃣ RESPONSE TO FRONTEND

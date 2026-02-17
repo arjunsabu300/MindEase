@@ -13,6 +13,7 @@ const yogaRoutes = require("./routes/yoga");
 const feedbackRoutes = require("./routes/session");
 const faceRoutes = require("./routes/face");
 const videoEmotionRoutes = require("./routes/VideoEmotion");
+const resolveEmotionRoute = require("./routes/resolveEmotion");
 
 
 // ==================== APP SETUP ====================
@@ -78,6 +79,7 @@ app.use("/api/yoga", yogaRoutes);
 app.use("/api/", feedbackRoutes);
 app.use("/api/emotion", faceRoutes);
 app.use("/api/emotion", videoEmotionRoutes);
+app.use("/api/emotion", resolveEmotionRoute);
 
 
 // ✅ Health Check (for testing on mobile browser)

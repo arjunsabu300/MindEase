@@ -18,7 +18,7 @@ import {
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.1.34:5000/api';
+const API_BASE_URL = 'http://192.168.1.36:5000/api';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
