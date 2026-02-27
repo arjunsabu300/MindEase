@@ -17,8 +17,8 @@ const upload = multer({ dest: "uploads/" }).fields([
 ]);
 
 // MODEL URLS
-const SER_URL  = "http://192.168.1.36:5000/api/emotion/voice";
-const STT_URL  = "http://192.168.1.36:5000/api/emotion/voicetext";
+const SER_URL  = "http://10.123.83.43:5000/api/emotion/voice";
+const STT_URL  = "http://10.123.83.43:5000/api/emotion/voicetext";
 const FER_URL  = "https://aceblade33-face-emotion-api-docker.hf.space/predict";
 
 router.post("/multimodal", upload, async (req, res) => {

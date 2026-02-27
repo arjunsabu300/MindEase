@@ -24,7 +24,7 @@ const upload = multer({
   }
 });
 
-const MULTIMODAL_URL = "http://192.168.1.36:5000/api/emotion/multimodal"; // Adjust port if needed
+const MULTIMODAL_URL = "http://10.123.83.43:5000/api/emotion/multimodal"; // Adjust port if needed
 
 const FRAME_TIMES = ["0.5", "1", "1.5", "2.2", "3"];
 
