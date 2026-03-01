@@ -1,246 +1,246 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  Platform,
-  StatusBar,
+  Text,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
-import { Text, Button } from "react-native-paper";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Camera, useCameraDevices } from "react-native-vision-camera";
 import YoutubePlayer from "react-native-youtube-iframe";
+import { calculateAngle, calculatePoseScore } from "../utils/poseUtils";
+import { poseTemplates } from "../utils/poseTemplates";
+import { usePoseDetection } from "../hooks/usePoseDetection";
 
-const MOCK_PLAN = [
-  {
-    id: "balasana",
-    duration: 60,
-    intensity: "low",
-  },
-];
+const { width } = Dimensions.get("window");
 
-export default function YogaSessionScreen({ route, navigation }) {
-  const {
-    yogaPlan = MOCK_PLAN,
-  } = route?.params || {};
+export default function YogaSessionScreen({ route }) {
+  const { yogaPlan, sessionId } = route.params;
+  const pose = yogaPlan[0];
 
-  const activePlan =
-    yogaPlan && yogaPlan.length > 0 ? yogaPlan : MOCK_PLAN;
+  const devices = useCameraDevices();
+  const device = devices.front;
 
-  const [index, setIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(
-    activePlan[0]?.duration || 60
-  );
+  const landmarks = usePoseDetection();
 
+  const [poseScore, setPoseScore] = useState(0);
+  const [feedback, setFeedback] = useState("Align your body properly.");
   const [videoId, setVideoId] = useState(null);
   const [loadingVideo, setLoadingVideo] = useState(true);
-  const [playing, setPlaying] = useState(true);
+  const [poseConfirmed, setPoseConfirmed] = useState(false);
 
-  const pose = activePlan[index];
-
-  // ⏱ Timer
+  /* ===============================
+     CAMERA PERMISSION
+  =============================== */
   useEffect(() => {
-    if (timeLeft <= 0) {
-      if (index + 1 < activePlan.length) {
-        setIndex(index + 1);
-        setTimeLeft(activePlan[index + 1].duration);
-      } else {
-        navigation.goBack();
+    const requestPermission = async () => {
+      const permission = await Camera.requestCameraPermission();
+      if (permission !== "authorized") {
+        console.log("Camera permission denied");
       }
-    }
+    };
+    requestPermission();
+  }, []);
 
-    const timer = setTimeout(() => {
-      setTimeLeft((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [timeLeft]);
-
-  // 🎥 Fetch YouTube video when pose changes
+  /* ===============================
+     FETCH YOUTUBE VIDEO
+  =============================== */
   useEffect(() => {
-    fetchYoutubeVideo();
-  }, [pose?.id]);
+    fetchVideo();
+  }, []);
 
-  const fetchYoutubeVideo = async () => {
+  const fetchVideo = async () => {
     try {
-      setLoadingVideo(true);
-
       const res = await fetch(
-        `http://10.123.83.43:5000/api/yoga/youtube?pose=${pose.id}`
+        `http://192.168.1.6:5000/api/yoga/youtube?pose=${pose.id}`
       );
-
       const data = await res.json();
-
-      if (data.videoId) {
-        setVideoId(data.videoId);
-      } else {
-        setVideoId(null);
-      }
+      setVideoId(data.videoId);
     } catch (err) {
-      console.error("Error fetching YouTube video:", err);
-      setVideoId(null);
+      console.log("Video fetch error:", err);
     } finally {
       setLoadingVideo(false);
     }
   };
 
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
+  /* ===============================
+     POSTURE CALCULATION LOGIC
+  =============================== */
+  useEffect(() => {
+    if (!landmarks || !poseTemplates[pose.id]) return;
+
+    const reference = poseTemplates[pose.id];
+
+    try {
+      const leftKnee = calculateAngle(
+        landmarks[23],
+        landmarks[25],
+        landmarks[27]
+      );
+
+      const rightKnee = calculateAngle(
+        landmarks[24],
+        landmarks[26],
+        landmarks[28]
+      );
+
+      const userAngles = { leftKnee, rightKnee };
+      const score = calculatePoseScore(userAngles, reference);
+
+      const smoothedScore = poseScore * 0.7 + score * 0.3;
+      setPoseScore(smoothedScore);
+
+      if (Math.abs(leftKnee - reference.leftKnee) > 20) {
+        setFeedback("Adjust your left knee angle slightly.");
+      } else if (Math.abs(rightKnee - reference.rightKnee) > 20) {
+        setFeedback("Adjust your right knee angle slightly.");
+      } else {
+        setFeedback("Perfect posture 🔥 Hold steady!");
+      }
+
+    } catch (err) {
+      console.log("Angle calculation error:", err);
+    }
+
+  }, [landmarks]);
+
+  /* ===============================
+     AUTO BACKEND UPDATE
+  =============================== */
+  useEffect(() => {
+    if (poseScore > 85 && !poseConfirmed) {
+      setPoseConfirmed(true);
+      updateSession();
+    }
+  }, [poseScore]);
+
+  const updateSession = async () => {
+    try {
+      await fetch(`http://192.168.1.6:5000/api/session/updatePose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          poseScore,
+          completionRatio: poseScore / 100,
+        }),
+      });
+      console.log("Session updated");
+    } catch (err) {
+      console.log("Session update failed:", err);
+    }
   };
 
-  const onStateChange = useCallback((state) => {
-    if (state === "ended") {
-      setPlaying(false);
-    }
-  }, []);
-
+  /* ===============================
+     RENDER UI
+  =============================== */
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Follow the Pose</Text>
-        <MaterialCommunityIcons
-          name="information-outline"
-          size={24}
-          color="#333"
-        />
-      </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Pose Info */}
-        <View style={styles.metaRow}>
-          <MaterialCommunityIcons
-            name="playlist-play"
-            size={20}
-            color="#999"
-          />
-          <Text style={styles.metaText}>
-            Pose {index + 1} of {activePlan.length} —{" "}
-            {formatTime(timeLeft)}
-          </Text>
-        </View>
-
-        {/* YouTube Player */}
+        {/* 1️⃣ YOGA VIDEO */}
         <View style={styles.videoContainer}>
           {loadingVideo ? (
             <ActivityIndicator size="large" color="#FF7F50" />
           ) : videoId ? (
             <YoutubePlayer
-              height={250}
-              play={playing}
+              height={220}
+              play={true}
               videoId={videoId}
-              onChangeState={onStateChange}
             />
           ) : (
-            <Text>No video found for {pose.id}</Text>
+            <Text>No reference video available.</Text>
           )}
         </View>
 
-        {/* Pose Details */}
-        <View style={styles.infoCard}>
-          <Text style={styles.poseTitle}>
-            {pose.id.replace("_", " ").toUpperCase()}
-          </Text>
-          <Text style={styles.durationText}>
-            Duration: {pose.duration} sec
-          </Text>
-          <Text style={styles.intensityText}>
-            Intensity: {pose.intensity}
+        {/* 2️⃣ INSTRUCTION SECTION */}
+        <View style={styles.instructionCard}>
+          <Text style={styles.instructionTitle}>Instructions</Text>
+          <Text style={styles.instructionText}>
+            Follow the pose shown above. Keep your spine aligned and knees stable.
+            Focus on breathing steadily while holding the posture.
           </Text>
         </View>
-      </ScrollView>
 
-      {/* Controls */}
-      <View style={styles.footer}>
-        <Button
-          mode="contained"
-          style={styles.nextBtn}
-          contentStyle={{ height: 50 }}
-          labelStyle={styles.btnLabel}
-          onPress={() => setTimeLeft(0)}
-        >
-          Next Pose
-        </Button>
-      </View>
+        {/* 3️⃣ CAMERA FEED */}
+        <View style={styles.cameraCard}>
+          {device && (
+            <Camera
+              style={StyleSheet.absoluteFill}
+              device={device}
+              isActive={true}
+            />
+          )}
+        </View>
+
+        {/* 4️⃣ LIVE POSE UPDATE */}
+        <View style={styles.feedbackCard}>
+          <Text style={styles.scoreText}>
+            Accuracy: {poseScore.toFixed(0)}%
+          </Text>
+          <Text style={styles.feedbackText}>
+            {feedback}
+          </Text>
+        </View>
+
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+/* ===============================
+   STYLES
+================================= */
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: "#FFF8F3",
-    paddingTop:
-      Platform.OS === "android"
-        ? StatusBar.currentHeight
-        : 0,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1A1A1A",
   },
   scrollContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 10,
-  },
-  metaText: {
-    color: "#999",
-    marginLeft: 6,
-    fontSize: 14,
+    padding: 20,
+    paddingBottom: 40,
   },
   videoContainer: {
-    marginVertical: 20,
-  },
-  infoCard: {
-    backgroundColor: "#fff",
-    padding: 20,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#F5F5F5",
+    overflow: "hidden",
+    marginBottom: 20,
   },
-  poseTitle: {
-    fontSize: 18,
+  instructionCard: {
+    backgroundColor: "#fff",
+    padding: 18,
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+  instructionTitle: {
     fontWeight: "700",
-    color: "#1A1A1A",
-  },
-  durationText: {
-    marginTop: 6,
-    color: "#888",
-  },
-  intensityText: {
-    marginTop: 4,
-    color: "#888",
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  nextBtn: {
-    backgroundColor: "#FF7F50",
-    borderRadius: 16,
-  },
-  btnLabel: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
+    marginBottom: 8,
+  },
+  instructionText: {
+    color: "#555",
+    lineHeight: 20,
+  },
+  cameraCard: {
+    height: width * 1.2,
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#000",
+    marginBottom: 20,
+  },
+  feedbackCard: {
+    backgroundColor: "#fff",
+    padding: 18,
+    borderRadius: 20,
+  },
+  scoreText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#00AA66",
+  },
+  feedbackText: {
+    marginTop: 6,
+    color: "#444",
   },
 });

@@ -29,7 +29,7 @@ export default function QuestionnaireScreen({ route, navigation }) {
     try {
 
       const response = await fetch(
-        "http://10.123.83.43:5000/api/emotion/resolve",
+        "http://192.168.1.6:5000/api/emotion/resolve",
         {
           method: "POST",
           headers: {
