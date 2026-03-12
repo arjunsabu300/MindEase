@@ -34,6 +34,39 @@ const sessionSchema = new mongoose.Schema({
 
   totalDuration: Number,
 
+  // Pose correction tracking
+  poseHistory: [
+    {
+      poseId: String,
+      timestamp: { type: Date, default: Date.now },
+      score: Number,
+      feedback: [
+        {
+          joint: String,
+          message: String,
+          severity: String
+        }
+      ],
+      angles: {
+        leftKnee: Number,
+        rightKnee: Number,
+        leftElbow: Number,
+        rightElbow: Number,
+        leftHip: Number,
+        rightHip: Number,
+        leftShoulder: Number,
+        rightShoulder: Number,
+        spine: Number
+      },
+      duration: Number // Time held in seconds
+    }
+  ],
+
+  // Overall pose performance
+  averagePoseScore: Number,
+  totalPosesCompleted: Number,
+  bestPoseScore: Number,
+
   createdAt: { type: Date, default: Date.now },
 });
 

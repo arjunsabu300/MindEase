@@ -16,6 +16,7 @@ const videoEmotionRoutes = require("./routes/VideoEmotion");
 const resolveEmotionRoute = require("./routes/resolveEmotion");
 const youtubeRoutes = require("./routes/youtube");
 const updatePoseRoute = require("./routes/updatepose");
+const poseRoutes = require("./routes/pose");
 
 
 // ==================== APP SETUP ====================
@@ -84,6 +85,7 @@ app.use("/api/emotion", videoEmotionRoutes);
 app.use("/api/emotion", resolveEmotionRoute);
 app.use("/api/yoga", youtubeRoutes);
 app.use("/api/session", updatePoseRoute);
+app.use("/api/pose", poseRoutes);
 
 
 // ✅ Health Check (for testing on mobile browser)

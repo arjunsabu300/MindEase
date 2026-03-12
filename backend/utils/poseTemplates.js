@@ -1,11 +1,5 @@
-// MediaPipe Pose Landmark Indices
-// 0: nose, 11: left_shoulder, 12: right_shoulder
-// 13: left_elbow, 14: right_elbow, 15: left_wrist, 16: right_wrist
-// 23: left_hip, 24: right_hip, 25: left_knee, 26: right_knee
-// 27: left_ankle, 28: right_ankle
-
-export const poseTemplates = {
-  // Child's Pose (Balasana)
+// Pose templates with reference angles for validation
+const poseTemplates = {
   balasana: {
     name: "Child's Pose",
     keyAngles: {
@@ -29,7 +23,6 @@ export const poseTemplates = {
     ]
   },
 
-  // Easy Pose (Sukhasana)
   sukhasana: {
     name: "Easy Pose",
     keyAngles: {
@@ -53,7 +46,6 @@ export const poseTemplates = {
     ]
   },
 
-  // Tree Pose (Vrikshasana)
   vrikshasana: {
     name: "Tree Pose",
     keyAngles: {
@@ -71,15 +63,13 @@ export const poseTemplates = {
     },
     instructions: [
       "Stand on one leg with weight centered",
-      "Place other foot on inner thigh or calf (not knee)",
+      "Place other foot on inner thigh or calf",
       "Keep hips level and facing forward",
       "Bring hands to heart center or overhead",
-      "Find a focal point to maintain balance",
-      "Hold for 30-60 seconds, then switch sides"
+      "Find a focal point to maintain balance"
     ]
   },
 
-  // Mountain Pose (Tadasana)
   tadasana: {
     name: "Mountain Pose",
     keyAngles: {
@@ -100,12 +90,10 @@ export const poseTemplates = {
       "Distribute weight evenly across both feet",
       "Engage thighs and lift kneecaps",
       "Lengthen spine and lift crown of head",
-      "Relax shoulders down and back",
-      "Arms alongside body, palms facing forward"
+      "Relax shoulders down and back"
     ]
   },
 
-  // Bridge Pose (Setu Bandha)
   setu_bandha: {
     name: "Bridge Pose",
     keyAngles: {
@@ -123,16 +111,14 @@ export const poseTemplates = {
       chest: "lifted toward chin"
     },
     instructions: [
-      "Lie on back with knees bent, feet hip-width apart",
+      "Lie on back with knees bent",
       "Place feet close to sitting bones",
       "Press into feet and lift hips up",
       "Interlace fingers under back",
-      "Roll shoulders under and lift chest",
       "Keep knees aligned over ankles"
     ]
   },
 
-  // Standing Forward Bend (Uttanasana)
   uttanasana: {
     name: "Standing Forward Bend",
     keyAngles: {
@@ -152,13 +138,11 @@ export const poseTemplates = {
       "Stand in Mountain Pose",
       "Hinge at hips and fold forward",
       "Keep spine long as you fold",
-      "Bend knees if needed to protect lower back",
-      "Let head hang heavy",
-      "Hold opposite elbows or touch floor"
+      "Bend knees if needed",
+      "Let head hang heavy"
     ]
   },
 
-  // Breathing Exercise (Pranayama)
   pranayama: {
     name: "Breathing Exercise",
     keyAngles: {
@@ -176,12 +160,10 @@ export const poseTemplates = {
       "Close eyes or soften gaze",
       "Breathe deeply through nose",
       "Inhale for 4 counts, hold for 4",
-      "Exhale for 6 counts",
-      "Continue for 2-5 minutes"
+      "Exhale for 6 counts"
     ]
   },
 
-  // Legs Up the Wall (Viparita Karani)
   legs_up_wall: {
     name: "Legs Up the Wall",
     keyAngles: {
@@ -202,23 +184,11 @@ export const poseTemplates = {
       "Swing legs up the wall as you lie back",
       "Scoot hips close to wall",
       "Keep legs straight and relaxed",
-      "Rest arms at sides, palms up",
-      "Close eyes and breathe deeply"
+      "Rest arms at sides, palms up"
     ]
   }
 };
 
-// Helper function to get pose template
-export const getPoseTemplate = (poseId) => {
-  return poseTemplates[poseId] || null;
-};
-
-// Helper function to get all pose names
-export const getAllPoseNames = () => {
-  return Object.keys(poseTemplates).map(key => ({
-    id: key,
-    name: poseTemplates[key].name
-  }));
-};
+module.exports = { poseTemplates };
 
 // Made with Bob
