@@ -257,7 +257,7 @@ cd backend
 npm start
 
 # Test with curl (in another terminal)
-curl -X POST http://localhost:5001/api/pose/analyze \
+curl -X POST http://localhost:5000/api/pose/analyze \
   -F "image=@test_image.jpg" \
   -F "poseId=warrior-pose"
 ```

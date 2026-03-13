@@ -41,7 +41,7 @@ npm start
 You should see:
 ```
 ✅ MediaPipe pose detection initialized (Python)
-🚀 Server running on port 5001
+🚀 Server running on port 5000
 ```
 
 ### Step 4: Start Frontend (30 seconds)

@@ -147,7 +147,7 @@ Create `.env` file:
 ```
 MONGODB_URI=mongodb://localhost:27017/mindease
 JWT_SECRET=your-secret-key
-PORT=5001
+PORT=5000
 ```
 
 3. **Start Server:**
@@ -165,7 +165,7 @@ npm install
 2. **Update API URL:**
 In `src/Screens/YogaSessionScreen.jsx`, update:
 ```javascript
-const API_URL = "http://YOUR_IP:5001";
+const API_URL = "http://YOUR_IP:5000";
 ```
 
 3. **Start Expo:**

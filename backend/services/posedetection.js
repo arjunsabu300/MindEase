@@ -12,6 +12,9 @@ const { spawn } = require('child_process');
 class PoseDetectionService {
   constructor() {
     this.initialized = false;
+    this.initializationAttempted = false;
+    this.usingFallback = false;
+    this.hasLoggedFallback = false;
     this.scriptPath = path.join(__dirname, '../python/pose_detector.py');
     
     // Try to use virtual environment Python (cross-platform)
@@ -38,11 +41,18 @@ class PoseDetectionService {
    * Checks if Python and MediaPipe are available
    */
   async initialize() {
+    if (this.initializationAttempted) {
+      return;
+    }
+
+    this.initializationAttempted = true;
+
     try {
       // Check if Python script exists
       if (!fs.existsSync(this.scriptPath)) {
         console.warn('⚠️  Python MediaPipe script not found. Using fallback mode.');
         this.initialized = false;
+        this.usingFallback = true;
         return;
       }
 
@@ -51,11 +61,13 @@ class PoseDetectionService {
       
       if (testResult.success) {
         this.initialized = true;
+        this.usingFallback = false;
         console.log('✅ MediaPipe pose detection initialized (Python)');
       } else {
         console.warn('⚠️  MediaPipe not available:', testResult.error);
-        console.warn('⚠️  Run: cd backend/python && bash setup.sh');
+        console.warn('⚠️  Using fallback pose detection until MediaPipe model/assets are available.');
         this.initialized = false;
+        this.usingFallback = true;
       }
     } catch (error) {
       console.error('❌ Failed to initialize pose detection:', error);
@@ -68,18 +80,35 @@ class PoseDetectionService {
    */
   async testPythonMediaPipe() {
     return new Promise((resolve) => {
-      const process = spawn(this.pythonPath, ['-c', 'import mediapipe; print("OK")']);
+      const process = spawn(this.pythonPath, [this.scriptPath, '--healthcheck']);
       
       let output = '';
+      let errorOutput = '';
       process.stdout.on('data', (data) => {
         output += data.toString();
       });
 
+      process.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
       process.on('close', (code) => {
-        if (code === 0 && output.includes('OK')) {
-          resolve({ success: true });
-        } else {
-          resolve({ success: false, error: 'MediaPipe not installed' });
+        try {
+          const result = JSON.parse(output);
+          if (result.success && result.ready) {
+            resolve({ success: true });
+            return;
+          }
+
+          resolve({
+            success: false,
+            error: result.error || 'MediaPipe detector is not ready',
+          });
+        } catch (error) {
+          resolve({
+            success: false,
+            error: errorOutput || output || `Healthcheck failed with exit code ${code}`,
+          });
         }
       });
 
@@ -95,7 +124,7 @@ class PoseDetectionService {
    * @returns {Object} Pose landmarks and metadata
    */
   async detectPoseFromImage(imagePath) {
-    if (!this.initialized) {
+    if (!this.initializationAttempted) {
       await this.initialize();
     }
 
@@ -109,6 +138,7 @@ class PoseDetectionService {
       const result = await this.callPythonMediaPipe(imagePath);
       
       if (result.success && result.detected) {
+        this.usingFallback = false;
         return {
           success: true,
           landmarks: result.landmarks,
@@ -118,6 +148,7 @@ class PoseDetectionService {
           method: 'mediapipe'
         };
       } else {
+        this.usingFallback = false;
         return {
           success: true,
           landmarks: null,
@@ -127,6 +158,10 @@ class PoseDetectionService {
       }
     } catch (error) {
       console.error('MediaPipe detection error:', error);
+      this.initialized = false;
+      this.usingFallback = true;
+      this.usingFallback = true;
+      this.usingFallback = true;
       // Fallback to mock detection
       return this.fallbackDetection(imagePath);
     }
@@ -180,7 +215,10 @@ class PoseDetectionService {
    * Generates realistic mock landmarks for testing
    */
   async fallbackDetection(imagePath) {
-    console.log('⚠️  Using fallback pose detection (mock data)');
+    if (!this.hasLoggedFallback) {
+      console.log('⚠️  Using fallback pose detection (mock data)');
+      this.hasLoggedFallback = true;
+    }
     
     try {
       const image = await loadImage(imagePath);
@@ -461,6 +499,9 @@ class PoseDetectionService {
    */
   async cleanup() {
     this.initialized = false;
+    this.initializationAttempted = false;
+    this.usingFallback = false;
+    this.hasLoggedFallback = false;
     console.log('Pose detection service cleaned up');
   }
 }

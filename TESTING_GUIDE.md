@@ -15,7 +15,7 @@ npm install
 cat > .env << EOF
 MONGODB_URI=mongodb://localhost:27017/mindease
 JWT_SECRET=mindease-secret-key-2024
-PORT=5001
+PORT=5000
 EOF
 
 # Start MongoDB (if not running)
@@ -32,7 +32,7 @@ npm run dev
 Expected output:
 ```
 ✅ Connected to MongoDB
-🚀 Server running on port 5001
+🚀 Server running on port 5000
 ```
 
 ### 2. Frontend Setup (5 minutes)
@@ -50,8 +50,8 @@ npm install
 # Windows: ipconfig
 
 # Edit src/Screens/YogaSessionScreen.jsx
-# Change: const API_URL = "http://192.168.1.3:5001";
-# To: const API_URL = "http://YOUR_IP:5001";
+# Change: const API_URL = "http://192.168.1.5:5000";
+# To: const API_URL = "http://YOUR_IP:5000";
 
 # Start Expo
 npm start
@@ -190,7 +190,7 @@ Feedback: "Perfect! Hold this position 🔥"
 - Ensure full body is visible
 - Move further from camera
 - Improve lighting
-- Check backend is running: `curl http://YOUR_IP:5001/api/health`
+- Check backend is running: `curl http://YOUR_IP:5000/api/health`
 
 ### Issue: Low accuracy scores
 **Solutions:**
@@ -210,7 +210,7 @@ Feedback: "Perfect! Hold this position 🔥"
 **Solutions:**
 - Verify backend URL is correct
 - Check device and computer on same network
-- Ping backend: `curl http://YOUR_IP:5001/api/health`
+- Ping backend: `curl http://YOUR_IP:5000/api/health`
 - Check firewall settings
 
 ## Performance Benchmarks
@@ -296,16 +296,16 @@ Test backend endpoints directly:
 
 ```bash
 # Health check
-curl http://localhost:5001/api/health
+curl http://localhost:5000/api/health
 
 # Get pose templates
-curl http://localhost:5001/api/pose/templates
+curl http://localhost:5000/api/pose/templates
 
 # Get specific template
-curl http://localhost:5001/api/pose/template/balasana
+curl http://localhost:5000/api/pose/template/balasana
 
 # Test pose detection (with image)
-curl -X POST http://localhost:5001/api/pose/detect \
+curl -X POST http://localhost:5000/api/pose/detect \
   -F "image=@/path/to/test-image.jpg"
 ```
 

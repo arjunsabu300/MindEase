@@ -60,11 +60,11 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-// const API_URL_SER = "http://192.168.1.3:5001/api/emotion/voice";
+// const API_URL_SER = "http://192.168.1.5:5000/api/emotion/voice";
 
-// const API_URL_STT = "http://192.168.1.3:5001/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.1.5:5000/api/emotion/voicetext";
 
-const API_URL_MULTI = "http://192.168.1.3:5001/api/emotion/multimodal";
+const API_URL_MULTI = "http://192.168.1.5:5000/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -121,7 +121,7 @@ const startVoiceAnalysis = async () => {
         text: result.text_emotion,
         fusion: result.final,
     });
-    }, 5001);
+    }, 5000);
   } catch (err) {
     setLoadingSER(false);
     Alert.alert("Error", err.message);
@@ -131,7 +131,7 @@ const startVoiceAnalysis = async () => {
 
   /* ===================== FER ===================== */
 
-const API_URL_FACE = "http://192.168.1.3:5001/api/emotion/face";
+const API_URL_FACE = "http://192.168.1.5:5000/api/emotion/face";
 
 
 /* ===================== FACE ANALYSIS (FER) ===================== */

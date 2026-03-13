@@ -7,6 +7,7 @@ Detects 33 body landmarks from images
 import sys
 import json
 import base64
+from pathlib import Path
 from io import BytesIO
 
 try:
@@ -25,21 +26,29 @@ class PoseDetector:
         if not MEDIAPIPE_AVAILABLE:
             raise ImportError(f"MediaPipe dependencies not available: {IMPORT_ERROR}")
         
+        self.detector = None
+        self.pose = None
+        self.use_new_api = False
+
         try:
             # Try new MediaPipe API (0.10.30+)
             from mediapipe.tasks import python
             from mediapipe.tasks.python import vision
             
-            # Use new task-based API
-            base_options = python.BaseOptions(model_asset_path='pose_landmarker.task')
-            options = vision.PoseLandmarkerOptions(
-                base_options=base_options,
-                running_mode=vision.RunningMode.IMAGE
-            )
-            self.detector = vision.PoseLandmarker.create_from_options(options)
-            self.use_new_api = True
-            
+            model_path = self._resolve_model_path()
+            if model_path:
+                base_options = python.BaseOptions(model_asset_path=str(model_path))
+                options = vision.PoseLandmarkerOptions(
+                    base_options=base_options,
+                    running_mode=vision.RunningMode.IMAGE
+                )
+                self.detector = vision.PoseLandmarker.create_from_options(options)
+                self.use_new_api = True
+
         except (ImportError, AttributeError, Exception):
+            self.detector = None
+
+        if not self.use_new_api:
             # Fallback to legacy API (0.10.9 and earlier)
             try:
                 self.mp_pose = mp.solutions.pose
@@ -50,9 +59,30 @@ class PoseDetector:
                     min_detection_confidence=0.5,
                     min_tracking_confidence=0.5
                 )
-                self.use_new_api = False
-            except AttributeError:
-                raise ImportError("MediaPipe Pose not available. Please reinstall: pip install mediapipe")
+            except AttributeError as error:
+                raise ImportError(
+                    "MediaPipe Pose not available. Install the pose model file or use a mediapipe build with solutions support."
+                ) from error
+
+    def _resolve_model_path(self):
+        """Resolve the pose task model from a few safe local locations."""
+        script_dir = Path(__file__).resolve().parent
+        candidates = [
+            script_dir / 'pose_landmarker.task',
+            script_dir / 'pose_landmarker_lite.task',
+            script_dir / 'models' / 'pose_landmarker.task',
+            script_dir / 'models' / 'pose_landmarker_lite.task',
+            script_dir.parent / 'models' / 'pose_landmarker.task',
+            script_dir.parent / 'models' / 'pose_landmarker_lite.task',
+            script_dir.parent / 'pose_landmarker.task',
+            script_dir.parent / 'pose_landmarker_lite.task',
+        ]
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+
+        return None
         
     def detect_from_file(self, image_path):
         """
@@ -221,6 +251,23 @@ def main():
     Command line interface
     Usage: python pose_detector.py <image_path>
     """
+    if len(sys.argv) >= 2 and sys.argv[1] == '--healthcheck':
+        try:
+            detector = PoseDetector()
+            detector.cleanup()
+            print(json.dumps({
+                'success': True,
+                'ready': True
+            }))
+            sys.exit(0)
+        except Exception as error:
+            print(json.dumps({
+                'success': False,
+                'ready': False,
+                'error': str(error)
+            }))
+            sys.exit(0)
+
     if len(sys.argv) < 2:
         print(json.dumps({
             'success': False,

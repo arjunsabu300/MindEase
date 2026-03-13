@@ -179,7 +179,7 @@ const resizedPhoto = await ImageManipulator.manipulateAsync(
 ### Testing Network:
 ```bash
 # Check if backend is reachable
-curl http://YOUR_IP:5001/api/health
+curl http://YOUR_IP:5000/api/health
 
 # Test upload speed
 # Use speedtest-cli or online tools
@@ -285,7 +285,7 @@ curl http://YOUR_IP:5001/api/health
 ### Issue: "Network request failed"
 ```javascript
 // Solution: Check API_URL
-const API_URL = "http://192.168.1.3:5001"; // Use your IP, not localhost
+const API_URL = "http://192.168.1.5:5000"; // Use your IP, not localhost
 ```
 
 ### Issue: Camera not showing

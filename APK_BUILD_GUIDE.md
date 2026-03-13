@@ -85,7 +85,7 @@ For production, update the API URL to use your deployed backend:
 ```javascript
 // src/Screens/YogaSessionScreen.jsx
 // Development
-const API_URL = "http://192.168.1.3:5001";
+const API_URL = "http://192.168.1.5:5000";
 
 // Production (update to your deployed backend)
 const API_URL = "https://your-backend-domain.com";
@@ -95,7 +95,7 @@ const API_URL = "https://your-backend-domain.com";
 ```javascript
 import Constants from 'expo-constants';
 
-const API_URL = Constants.expoConfig?.extra?.apiUrl || "http://192.168.1.3:5001";
+const API_URL = Constants.expoConfig?.extra?.apiUrl || "http://192.168.1.5:5000";
 ```
 
 Then in `app.json`:

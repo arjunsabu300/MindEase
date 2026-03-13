@@ -59,7 +59,7 @@ npm start
 ```
 🐍 Using virtual environment Python (macOS/Linux)
 ✅ MediaPipe pose detection initialized (Python)
-🚀 Server running on port 5001
+🚀 Server running on port 5000
 ```
 
 ### Step 3: Start Frontend
@@ -124,7 +124,7 @@ Expected: JSON with 33 landmarks
 cd backend && npm start
 
 # In another terminal, test API
-curl -X POST http://localhost:5001/api/pose/analyze \
+curl -X POST http://localhost:5000/api/pose/analyze \
   -F "image=@test_image.jpg" \
   -F "poseId=warrior-pose"
 ```
@@ -391,7 +391,7 @@ npm start -- --clear
 
 1. Check backend logs for errors
 2. Verify MediaPipe: `cd backend/python && bash test_mediapipe.sh`
-3. Test API: `curl -X POST http://localhost:5001/api/pose/analyze ...`
+3. Test API: `curl -X POST http://localhost:5000/api/pose/analyze ...`
 4. Check console for frontend errors
 
 **All systems are GO!** 🎊

@@ -19,7 +19,7 @@ import { getPoseTemplate } from "../utils/poseTemplates";
 import * as ImageManipulator from 'expo-image-manipulator';
 
 const { width, height } = Dimensions.get("window");
-const API_URL = "http://192.168.1.3:5001"; // Update with your backend URL
+const API_URL = "http://192.168.1.5:5000"; // Update with your backend URL
 
 export default function YogaSessionScreen({ route, navigation }) {
   const { yogaPlan = [], sessionId } = route?.params || {};
@@ -57,6 +57,9 @@ export default function YogaSessionScreen({ route, navigation }) {
   const processingInterval = useRef(null);
   const holdCheckInterval = useRef(null);
   const lastProcessTime = useRef(0);
+  const completionInProgress = useRef(false);
+  const latestPoseScore = useRef(0);
+  const latestFeedback = useRef({ overall: "Watch the video to learn the pose", details: [] });
 
   /* ===============================
      CAMERA PERMISSION
@@ -80,9 +83,21 @@ export default function YogaSessionScreen({ route, navigation }) {
       setVideoWatched(false);
       setSessionStarted(false);
       setShowReadyModal(false);
+      setPoseStartTime(null);
+      setPoseHoldDuration(0);
+      setCameraReady(false);
+      completionInProgress.current = false;
       setFeedback({ overall: "Watch the video to learn the pose", details: [] });
     }
   }, [currentPose]);
+
+  useEffect(() => {
+    latestPoseScore.current = poseScore;
+  }, [poseScore]);
+
+  useEffect(() => {
+    latestFeedback.current = feedback;
+  }, [feedback]);
 
   /* ===============================
      FETCH YOUTUBE VIDEO
@@ -144,6 +159,8 @@ export default function YogaSessionScreen({ route, navigation }) {
     setShowReadyModal(false);
     setSessionStarted(true);
     setPoseStartTime(Date.now());
+    setPoseHoldDuration(0);
+    completionInProgress.current = false;
     setFeedback({ overall: "Position yourself in camera view", details: [] });
   };
 
@@ -161,16 +178,24 @@ export default function YogaSessionScreen({ route, navigation }) {
     }
 
     return () => {
-      if (processingInterval.current) {
-        clearInterval(processingInterval.current);
-      }
-      if (holdCheckInterval.current) {
-        clearInterval(holdCheckInterval.current);
-      }
+      clearTrackingIntervals();
     };
   }, [sessionStarted, cameraReady, poseCompleted]);
 
+  const clearTrackingIntervals = () => {
+    if (processingInterval.current) {
+      clearInterval(processingInterval.current);
+      processingInterval.current = null;
+    }
+    if (holdCheckInterval.current) {
+      clearInterval(holdCheckInterval.current);
+      holdCheckInterval.current = null;
+    }
+  };
+
   const startLiveTracking = () => {
+    clearTrackingIntervals();
+
     // Process frames every 3 seconds to reduce shutter sound frequency
     // This is a compromise between real-time feedback and user experience
     processingInterval.current = setInterval(() => {
@@ -182,6 +207,15 @@ export default function YogaSessionScreen({ route, navigation }) {
       if (poseStartTime) {
         const duration = Math.floor((Date.now() - poseStartTime) / 1000);
         setPoseHoldDuration(duration);
+
+        if (currentPose?.duration && duration >= currentPose.duration && !completionInProgress.current) {
+          finalizeCurrentPose({
+            finalScore: latestPoseScore.current,
+            feedbackData: latestFeedback.current,
+            angles: null,
+            shouldAlert: false,
+          });
+        }
       }
     }, 1000);
   };
@@ -268,7 +302,12 @@ export default function YogaSessionScreen({ route, navigation }) {
         if (smoothedScore >= 85 && !poseCompleted) {
           const recentScores = [...scoreHistory, smoothedScore].slice(-3);
           if (recentScores.length >= 3 && recentScores.every(s => s >= 85)) {
-            completePose(smoothedScore, feedbackData, data.validation.angles);
+            finalizeCurrentPose({
+              finalScore: smoothedScore,
+              feedbackData,
+              angles: data.validation.angles,
+              shouldAlert: true,
+            });
           }
         }
       } else {
@@ -286,16 +325,22 @@ export default function YogaSessionScreen({ route, navigation }) {
     }
   };
 
-  const completePose = async (finalScore, feedbackData, angles) => {
+  const finalizeCurrentPose = async ({
+    finalScore = 0,
+    feedbackData = feedback,
+    angles = null,
+    shouldAlert = false,
+  } = {}) => {
+    if (completionInProgress.current) {
+      return;
+    }
+
+    completionInProgress.current = true;
     setPoseCompleted(true);
-    
-    // Clear intervals
-    if (processingInterval.current) clearInterval(processingInterval.current);
-    if (holdCheckInterval.current) clearInterval(holdCheckInterval.current);
+    clearTrackingIntervals();
 
-    const duration = Math.floor((Date.now() - poseStartTime) / 1000);
+    const duration = poseStartTime ? Math.floor((Date.now() - poseStartTime) / 1000) : poseHoldDuration;
 
-    // Update backend
     try {
       await fetch(`${API_URL}/api/session/updatePose`, {
         method: 'POST',
@@ -304,13 +349,14 @@ export default function YogaSessionScreen({ route, navigation }) {
           sessionId,
           poseScore: finalScore,
           poseId: currentPose.id,
-          feedback: feedbackData.details,
+          feedback: feedbackData?.details || [],
           angles: angles,
           duration: duration,
         }),
       });
 
-      // Show completion message
+      if (shouldAlert) {
+        // Show completion message
       Alert.alert(
         "Pose Completed! 🎉",
         `Great job! Score: ${Math.round(finalScore)}%\nDuration: ${duration}s`,
@@ -321,8 +367,10 @@ export default function YogaSessionScreen({ route, navigation }) {
           },
         ]
       );
+      }
     } catch (error) {
       console.error("Session update error:", error);
+      if (shouldAlert) {
       Alert.alert(
         "Pose Completed! 🎉",
         `Great job! Score: ${Math.round(finalScore)}%\nDuration: ${duration}s`,
@@ -333,12 +381,19 @@ export default function YogaSessionScreen({ route, navigation }) {
           },
         ]
       );
+      }
+    }
+
+    if (!shouldAlert) {
+      moveToNextPose();
     }
   };
 
   const moveToNextPose = () => {
+    clearTrackingIntervals();
+    completionInProgress.current = false;
     if (currentPoseIndex < yogaPlan.length - 1) {
-      setCurrentPoseIndex(currentPoseIndex + 1);
+      setCurrentPoseIndex((prev) => prev + 1);
     } else {
       // Session complete
       Alert.alert(
@@ -361,6 +416,45 @@ export default function YogaSessionScreen({ route, navigation }) {
       [
         { text: "Cancel", style: "cancel" },
         { text: "Skip", onPress: () => moveToNextPose() },
+      ]
+    );
+  };
+
+  const handleNextPress = () => {
+    Alert.alert(
+      "Move to Next Exercise?",
+      "This will finish the current exercise and move to the next one.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Next",
+          onPress: () =>
+            finalizeCurrentPose({
+              finalScore: poseScore,
+              feedbackData: feedback,
+              angles: null,
+              shouldAlert: false,
+            }),
+        },
+      ]
+    );
+  };
+
+  const handleStopSession = () => {
+    Alert.alert(
+      "Stop Session?",
+      "This will terminate the current yoga session.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Stop",
+          style: "destructive",
+          onPress: () => {
+            clearTrackingIntervals();
+            completionInProgress.current = false;
+            navigation.goBack();
+          },
+        },
       ]
     );
   };
@@ -544,6 +638,19 @@ export default function YogaSessionScreen({ route, navigation }) {
                   <Text style={styles.successText}>Hold this position!</Text>
                 </View>
               )}
+
+              <View style={styles.sessionActionRow}>
+                <TouchableOpacity style={styles.stopButton} onPress={handleStopSession}>
+                  <MaterialCommunityIcons name="stop-circle-outline" size={18} color="#D32F2F" />
+                  <Text style={styles.stopButtonText}>Stop</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.nextButton} onPress={handleNextPress}>
+                  <Text style={styles.nextButtonText}>
+                    {currentPoseIndex < yogaPlan.length - 1 ? "Next Exercise" : "Finish Session"}
+                  </Text>
+                  <MaterialCommunityIcons name="arrow-right" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
           </>
         )}
@@ -868,6 +975,42 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: "#4CAF50",
     fontWeight: "600",
+  },
+  sessionActionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 16,
+    gap: 12,
+  },
+  stopButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#F5B5B5",
+    backgroundColor: "#FFF5F5",
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  stopButtonText: {
+    marginLeft: 8,
+    color: "#D32F2F",
+    fontWeight: "700",
+  },
+  nextButton: {
+    flex: 1.4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FF7F50",
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  nextButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    marginRight: 8,
   },
   loadingText: {
     marginTop: 16,

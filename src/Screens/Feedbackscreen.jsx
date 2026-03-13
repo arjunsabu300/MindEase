@@ -1,17 +1,48 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Alert } from "react-native";
 import { Text, Button, Title } from "react-native-paper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_URL_FEEDBACK = "http://192.168.1.3:5001/api/feedback";
+const API_URL_FEEDBACK = "http://192.168.1.5:5000/api/feedback";
 
 export default function FeedbackScreen({ route, navigation }) {
-  const { sessionId, userId, completed, completionRatio } = route.params;
+  const { sessionId, userId: routeUserId, completed = true, completionRatio = 1 } = route.params || {};
   console.log("FeedbackScreen params:", route.params);
   const [rating, setRating] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState(routeUserId || null);
+
+  useEffect(() => {
+    const loadUserId = async () => {
+      if (routeUserId) {
+        return;
+      }
+
+      try {
+        const storedUserData = await AsyncStorage.getItem("userData");
+        if (!storedUserData) {
+          return;
+        }
+
+        const parsedUserData = JSON.parse(storedUserData);
+        if (parsedUserData?.id) {
+          setUserId(parsedUserData.id);
+        }
+      } catch (error) {
+        console.error("Failed to load user data for feedback:", error.message);
+      }
+    };
+
+    loadUserId();
+  }, [routeUserId]);
 
   const submitFeedback = async () => {
     try {
+      if (!sessionId || !userId) {
+        Alert.alert("Error", "Session or user information is missing");
+        return;
+      }
+
       setLoading(true);
 
       const res = await fetch(API_URL_FEEDBACK, {

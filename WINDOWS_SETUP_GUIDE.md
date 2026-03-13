@@ -73,7 +73,7 @@ npm start
 ```
 🐍 Using virtual environment Python (Windows)
 ✅ MediaPipe pose detection initialized (Python)
-🚀 Server running on port 5001
+🚀 Server running on port 5000
 ```
 
 ### Step 4: Start Frontend
@@ -310,7 +310,7 @@ npm install
 
 ### Error: "Port already in use"
 ```cmd
-netstat -ano | findstr :5001
+netstat -ano | findstr :5000
 taskkill /PID <PID> /F
 ```
 
@@ -326,7 +326,7 @@ dir venv\Scripts\python.exe
 ```
 🐍 Using virtual environment Python (Windows)
 ✅ MediaPipe pose detection initialized (Python)
-🚀 Server running on port 5001
+🚀 Server running on port 5000
 ```
 
 ### App Behavior

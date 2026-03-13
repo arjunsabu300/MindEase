@@ -60,7 +60,7 @@ router.post('/detect', upload.single('image'), async (req, res) => {
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
-    }, 5001);
+    }, 5000);
 
     if (result.success) {
       res.json({
@@ -237,7 +237,7 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
-    }, 5001);
+    }, 5000);
 
     if (!detection.success || !detection.landmarks) {
       return res.json({
