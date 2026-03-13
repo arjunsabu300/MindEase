@@ -1,0 +1,7 @@
+# MediaPipe Pose Detection Requirements
+# All packages are FREE and open-source
+
+mediapipe>=0.10.30
+opencv-python>=4.9.0
+numpy>=1.24.0
+Pillow>=10.0.0

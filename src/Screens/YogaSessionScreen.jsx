@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -9,16 +9,17 @@ import {
   Dimensions,
   TouchableOpacity,
   Alert,
+  Modal,
 } from "react-native";
-import { Camera, CameraView } from "expo-camera";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { extractAnglesFromLandmarks, generatePoseFeedback, smoothScore, checkPoseHold } from "../utils/poseUtils";
+import { smoothScore } from "../utils/poseUtils";
 import { getPoseTemplate } from "../utils/poseTemplates";
 import * as ImageManipulator from 'expo-image-manipulator';
 
 const { width, height } = Dimensions.get("window");
-const API_URL = "http://192.168.1.5:5000"; // Update with your backend URL
+const API_URL = "http://192.168.1.3:5001"; // Update with your backend URL
 
 export default function YogaSessionScreen({ route, navigation }) {
   const { yogaPlan = [], sessionId } = route?.params || {};
@@ -26,13 +27,13 @@ export default function YogaSessionScreen({ route, navigation }) {
   const currentPose = yogaPlan[currentPoseIndex];
 
   // Camera states
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [cameraReady, setCameraReady] = useState(false);
   const cameraRef = useRef(null);
 
   // Pose detection states
   const [poseScore, setPoseScore] = useState(0);
-  const [feedback, setFeedback] = useState({ overall: "Position yourself in camera view", details: [] });
+  const [feedback, setFeedback] = useState({ overall: "Watch the video to learn the pose", details: [] });
   const [isProcessing, setIsProcessing] = useState(false);
   const [poseTemplate, setPoseTemplate] = useState(null);
 
@@ -40,6 +41,11 @@ export default function YogaSessionScreen({ route, navigation }) {
   const [videoId, setVideoId] = useState(null);
   const [loadingVideo, setLoadingVideo] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [videoWatched, setVideoWatched] = useState(false);
+
+  // Session flow states
+  const [showReadyModal, setShowReadyModal] = useState(false);
+  const [sessionStarted, setSessionStarted] = useState(false);
 
   // Session tracking
   const [poseStartTime, setPoseStartTime] = useState(null);
@@ -47,18 +53,18 @@ export default function YogaSessionScreen({ route, navigation }) {
   const [scoreHistory, setScoreHistory] = useState([]);
   const [poseCompleted, setPoseCompleted] = useState(false);
 
-  // Processing interval
+  // Processing interval - for live tracking
   const processingInterval = useRef(null);
   const holdCheckInterval = useRef(null);
+  const lastProcessTime = useRef(0);
 
   /* ===============================
      CAMERA PERMISSION
   =============================== */
   useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === "granted");
-    })();
+    if (!permission) {
+      requestPermission();
+    }
   }, []);
 
   /* ===============================
@@ -71,8 +77,10 @@ export default function YogaSessionScreen({ route, navigation }) {
       setPoseCompleted(false);
       setPoseScore(0);
       setScoreHistory([]);
-      setPoseStartTime(Date.now());
-      setFeedback({ overall: "Get into position", details: [] });
+      setVideoWatched(false);
+      setSessionStarted(false);
+      setShowReadyModal(false);
+      setFeedback({ overall: "Watch the video to learn the pose", details: [] });
     }
   }, [currentPose]);
 
@@ -82,15 +90,11 @@ export default function YogaSessionScreen({ route, navigation }) {
   useEffect(() => {
     if (currentPose?.id) {
       fetchVideo();
-    } else {
-      setVideoId(null);
-      setLoadingVideo(false);
     }
   }, [currentPose]);
 
   const fetchVideo = async () => {
     if (!currentPose?.id) {
-      setVideoId(null);
       setLoadingVideo(false);
       return;
     }
@@ -98,8 +102,15 @@ export default function YogaSessionScreen({ route, navigation }) {
     setLoadingVideo(true);
     try {
       const res = await fetch(`${API_URL}/api/yoga/youtube?pose=${currentPose.id}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch video');
+      }
       const data = await res.json();
-      setVideoId(res.ok ? data?.videoId ?? null : null);
+      if (data.videoId) {
+        setVideoId(data.videoId);
+      } else {
+        setVideoId(null);
+      }
     } catch (err) {
       console.log("Video fetch error:", err);
       setVideoId(null);
@@ -109,11 +120,44 @@ export default function YogaSessionScreen({ route, navigation }) {
   };
 
   /* ===============================
-     POSE DETECTION LOOP
+     VIDEO STATE CHANGE HANDLER
+  =============================== */
+  const onVideoStateChange = useCallback((state) => {
+    if (state === "ended") {
+      setVideoWatched(true);
+      setIsPlaying(false);
+    } else if (state === "playing") {
+      setIsPlaying(true);
+    } else if (state === "paused") {
+      setIsPlaying(false);
+    }
+  }, []);
+
+  /* ===============================
+     READY MODAL HANDLER
+  =============================== */
+  const handleVideoComplete = () => {
+    setShowReadyModal(true);
+  };
+
+  const handleLetsGetStarted = () => {
+    setShowReadyModal(false);
+    setSessionStarted(true);
+    setPoseStartTime(Date.now());
+    setFeedback({ overall: "Position yourself in camera view", details: [] });
+  };
+
+  const handleNotReady = () => {
+    setShowReadyModal(false);
+    // User can watch video again
+  };
+
+  /* ===============================
+     LIVE POSE DETECTION
   =============================== */
   useEffect(() => {
-    if (cameraReady && !poseCompleted) {
-      startPoseDetection();
+    if (sessionStarted && cameraReady && !poseCompleted) {
+      startLiveTracking();
     }
 
     return () => {
@@ -124,13 +168,13 @@ export default function YogaSessionScreen({ route, navigation }) {
         clearInterval(holdCheckInterval.current);
       }
     };
-  }, [cameraReady, poseCompleted]);
+  }, [sessionStarted, cameraReady, poseCompleted]);
 
-  const startPoseDetection = () => {
-    // Process frames every 2 seconds (to avoid overwhelming the backend)
+  const startLiveTracking = () => {
+    // Process frames every 1.5 seconds for live tracking (faster than before)
     processingInterval.current = setInterval(() => {
       captureAndAnalyzePose();
-    }, 2000);
+    }, 1500);
 
     // Check pose hold every second
     holdCheckInterval.current = setInterval(() => {
@@ -144,21 +188,29 @@ export default function YogaSessionScreen({ route, navigation }) {
   const captureAndAnalyzePose = async () => {
     if (!cameraRef.current || isProcessing || poseCompleted) return;
 
+    // Throttle processing to avoid overwhelming
+    const now = Date.now();
+    if (now - lastProcessTime.current < 1000) return;
+    lastProcessTime.current = now;
+
     setIsProcessing(true);
 
     try {
-      // Capture photo from camera
+      // Capture frame silently (no shutter sound)
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.5,
+        quality: 0.4,
         base64: false,
         skipProcessing: true,
+        exif: false,
+        mute: true, // Mute shutter sound
+        isImageMirror: false,
       });
 
       // Resize image for faster processing
       const resizedPhoto = await ImageManipulator.manipulateAsync(
         photo.uri,
-        [{ resize: { width: 640 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 480 } }], // Smaller for faster processing
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       // Send to backend for pose detection
@@ -179,7 +231,7 @@ export default function YogaSessionScreen({ route, navigation }) {
         type: 'image/jpeg',
         name: 'pose.jpg',
       });
-      formData.append('poseId', currentPose?.id || '');
+      formData.append('poseId', currentPose.id);
 
       const response = await fetch(`${API_URL}/api/pose/analyze`, {
         method: 'POST',
@@ -198,7 +250,7 @@ export default function YogaSessionScreen({ route, navigation }) {
           : newScore;
 
         setPoseScore(smoothedScore);
-        setScoreHistory(prev => [...prev, smoothedScore].slice(-5)); // Keep last 5 scores
+        setScoreHistory(prev => [...prev, smoothedScore].slice(-5));
 
         // Generate feedback
         const feedbackData = {
@@ -225,6 +277,10 @@ export default function YogaSessionScreen({ route, navigation }) {
       }
     } catch (error) {
       console.error("Backend analysis error:", error);
+      setFeedback({ 
+        overall: "Analyzing your pose...", 
+        details: [] 
+      });
     }
   };
 
@@ -245,7 +301,7 @@ export default function YogaSessionScreen({ route, navigation }) {
         body: JSON.stringify({
           sessionId,
           poseScore: finalScore,
-          poseId: currentPose?.id,
+          poseId: currentPose.id,
           feedback: feedbackData.details,
           angles: angles,
           duration: duration,
@@ -265,6 +321,16 @@ export default function YogaSessionScreen({ route, navigation }) {
       );
     } catch (error) {
       console.error("Session update error:", error);
+      Alert.alert(
+        "Pose Completed! 🎉",
+        `Great job! Score: ${Math.round(finalScore)}%\nDuration: ${duration}s`,
+        [
+          {
+            text: "Next Pose",
+            onPress: () => moveToNextPose(),
+          },
+        ]
+      );
     }
   };
 
@@ -300,7 +366,7 @@ export default function YogaSessionScreen({ route, navigation }) {
   /* ===============================
      RENDER UI
   =============================== */
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#FF7F50" />
@@ -309,12 +375,18 @@ export default function YogaSessionScreen({ route, navigation }) {
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <View style={styles.centerContainer}>
         <MaterialCommunityIcons name="camera-off" size={64} color="#999" />
         <Text style={styles.errorText}>Camera permission denied</Text>
         <Text style={styles.errorSubtext}>Please enable camera access in settings</Text>
+        <TouchableOpacity
+          style={styles.proceedButton}
+          onPress={requestPermission}
+        >
+          <Text style={styles.proceedButtonText}>Grant Permission</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -322,9 +394,13 @@ export default function YogaSessionScreen({ route, navigation }) {
   if (!currentPose) {
     return (
       <View style={styles.centerContainer}>
-        <MaterialCommunityIcons name="alert-circle-outline" size={64} color="#999" />
         <Text style={styles.errorText}>No yoga poses available</Text>
-        <Text style={styles.errorSubtext}>Please generate a yoga plan before starting the session.</Text>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -335,13 +411,13 @@ export default function YogaSessionScreen({ route, navigation }) {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="#1A1A1A" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
             Pose {currentPoseIndex + 1} of {yogaPlan.length}
           </Text>
-          <TouchableOpacity onPress={skipPose} style={styles.skipButton}>
+          <TouchableOpacity onPress={skipPose} style={styles.headerButton}>
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
         </View>
@@ -356,90 +432,156 @@ export default function YogaSessionScreen({ route, navigation }) {
         </View>
 
         {/* Reference Video */}
-        <View style={styles.videoContainer}>
-          {loadingVideo ? (
-            <ActivityIndicator size="large" color="#FF7F50" />
-          ) : videoId ? (
-            <YoutubePlayer
-              height={220}
-              play={isPlaying}
-              videoId={videoId}
-              onChangeState={(state) => setIsPlaying(state === "playing")}
-            />
-          ) : (
-            <Text style={styles.noVideoText}>No reference video available</Text>
-          )}
-        </View>
+        {!sessionStarted && (
+          <View style={styles.videoContainer}>
+            {loadingVideo ? (
+              <View style={styles.videoLoading}>
+                <ActivityIndicator size="large" color="#FF7F50" />
+                <Text style={styles.loadingText}>Loading video...</Text>
+              </View>
+            ) : videoId ? (
+              <>
+                <YoutubePlayer
+                  height={220}
+                  play={isPlaying}
+                  videoId={videoId}
+                  onChangeState={onVideoStateChange}
+                />
+                {videoWatched && (
+                  <TouchableOpacity 
+                    style={styles.readyButton}
+                    onPress={handleVideoComplete}
+                  >
+                    <MaterialCommunityIcons name="check-circle" size={24} color="#fff" />
+                    <Text style={styles.readyButtonText}>I'm Ready!</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <View style={styles.noVideoContainer}>
+                <MaterialCommunityIcons name="video-off" size={48} color="#999" />
+                <Text style={styles.noVideoText}>No reference video available</Text>
+                <TouchableOpacity 
+                  style={styles.proceedButton}
+                  onPress={handleVideoComplete}
+                >
+                  <Text style={styles.proceedButtonText}>Proceed Anyway</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Instructions */}
-        <View style={styles.instructionCard}>
-          <Text style={styles.instructionTitle}>Instructions</Text>
-          {poseTemplate?.instructions?.map((instruction, index) => (
-            <View key={index} style={styles.instructionRow}>
-              <Text style={styles.bulletPoint}>•</Text>
-              <Text style={styles.instructionText}>{instruction}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Camera Feed */}
-        <View style={styles.cameraCard}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-            facing="front"
-            onCameraReady={() => setCameraReady(true)}
-          />
-          <View pointerEvents="none" style={styles.cameraOverlay}>
-            {isProcessing && (
-              <View style={styles.processingBadge}>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.processingText}>Analyzing...</Text>
+        {!sessionStarted && (
+          <View style={styles.instructionCard}>
+            <Text style={styles.instructionTitle}>Instructions</Text>
+            {poseTemplate?.instructions?.map((instruction, index) => (
+              <View key={index} style={styles.instructionRow}>
+                <Text style={styles.bulletPoint}>•</Text>
+                <Text style={styles.instructionText}>{instruction}</Text>
               </View>
-            )}
+            ))}
           </View>
-        </View>
+        )}
 
-        {/* Live Feedback */}
-        <View style={styles.feedbackCard}>
-          <View style={styles.scoreRow}>
-            <View style={styles.scoreCircle}>
-              <Text style={styles.scoreNumber}>{Math.round(poseScore)}</Text>
-              <Text style={styles.scoreLabel}>Score</Text>
+        {/* Camera Feed - Only show when session started */}
+        {sessionStarted && (
+          <>
+            <View style={styles.cameraCard}>
+              <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing="front"
+                onCameraReady={() => setCameraReady(true)}
+                enableTorch={false}
+                mute={true}
+              />
+              {/* Overlay - positioned absolutely outside CameraView */}
+              <View style={styles.cameraOverlay}>
+                <View style={styles.liveIndicator}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>LIVE TRACKING</Text>
+                </View>
+              </View>
             </View>
-            <View style={styles.durationInfo}>
-              <MaterialCommunityIcons name="clock-outline" size={20} color="#666" />
-              <Text style={styles.durationValue}>{poseHoldDuration}s</Text>
-            </View>
-          </View>
 
-          <View style={styles.feedbackContent}>
-            <Text style={styles.feedbackOverall}>{feedback.overall}</Text>
-            {feedback.details && feedback.details.length > 0 && (
-              <View style={styles.detailsList}>
-                {feedback.details.slice(0, 3).map((detail, index) => (
-                  <View key={index} style={styles.detailItem}>
-                    <MaterialCommunityIcons 
-                      name={detail.severity === 'high' ? 'alert-circle' : 'information'} 
-                      size={16} 
-                      color={detail.severity === 'high' ? '#F44336' : '#FF9800'} 
-                    />
-                    <Text style={styles.detailText}>{detail.message}</Text>
+            {/* Live Feedback */}
+            <View style={styles.feedbackCard}>
+              <View style={styles.scoreRow}>
+                <View style={styles.scoreCircle}>
+                  <Text style={styles.scoreNumber}>{Math.round(poseScore)}</Text>
+                  <Text style={styles.scoreLabel}>Score</Text>
+                </View>
+                <View style={styles.durationInfo}>
+                  <MaterialCommunityIcons name="clock-outline" size={20} color="#666" />
+                  <Text style={styles.durationValue}>{poseHoldDuration}s</Text>
+                </View>
+              </View>
+
+              <View style={styles.feedbackContent}>
+                <Text style={styles.feedbackOverall}>{feedback.overall}</Text>
+                {feedback.details && feedback.details.length > 0 && (
+                  <View style={styles.detailsList}>
+                    {feedback.details.slice(0, 3).map((detail, index) => (
+                      <View key={index} style={styles.detailItem}>
+                        <MaterialCommunityIcons 
+                          name={detail.severity === 'high' ? 'alert-circle' : 'information'} 
+                          size={16} 
+                          color={detail.severity === 'high' ? '#F44336' : '#FF9800'} 
+                        />
+                        <Text style={styles.detailText}>{detail.message}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
+                )}
               </View>
-            )}
-          </View>
 
-          {poseScore >= 85 && (
-            <View style={styles.successBanner}>
-              <MaterialCommunityIcons name="check-circle" size={20} color="#4CAF50" />
-              <Text style={styles.successText}>Hold this position!</Text>
+              {poseScore >= 85 && (
+                <View style={styles.successBanner}>
+                  <MaterialCommunityIcons name="check-circle" size={20} color="#4CAF50" />
+                  <Text style={styles.successText}>Hold this position!</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
+          </>
+        )}
 
       </ScrollView>
+
+      {/* Ready Modal */}
+      <Modal
+        visible={showReadyModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowReadyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <MaterialCommunityIcons name="yoga" size={64} color="#FF7F50" />
+            <Text style={styles.modalTitle}>Are You Ready?</Text>
+            <Text style={styles.modalText}>
+              Make sure you understand the pose and have enough space to perform it safely.
+              {'\n\n'}
+              Live tracking will start immediately - no camera shutter sounds!
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={styles.modalButtonSecondary}
+                onPress={handleNotReady}
+              >
+                <Text style={styles.modalButtonSecondaryText}>Watch Again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.modalButtonPrimary}
+                onPress={handleLetsGetStarted}
+              >
+                <Text style={styles.modalButtonPrimaryText}>Let's Get Started!</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -469,16 +611,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  backButton: {
+  headerButton: {
     padding: 8,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: "#1A1A1A",
-  },
-  skipButton: {
-    padding: 8,
   },
   skipText: {
     color: "#FF7F50",
@@ -492,6 +631,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   poseName: {
     fontSize: 20,
@@ -518,18 +661,64 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: "#000",
     minHeight: 220,
+  },
+  videoLoading: {
+    height: 220,
     justifyContent: "center",
     alignItems: "center",
+  },
+  noVideoContainer: {
+    height: 220,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
   },
   noVideoText: {
     color: "#fff",
     fontSize: 14,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  proceedButton: {
+    backgroundColor: "#FF7F50",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  proceedButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  readyButton: {
+    position: "absolute",
+    bottom: 16,
+    right: 16,
+    backgroundColor: "#4CAF50",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  readyButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    marginLeft: 8,
+    fontSize: 16,
   },
   instructionCard: {
     backgroundColor: "#fff",
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   instructionTitle: {
     fontWeight: "700",
@@ -557,33 +746,55 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#000",
     marginBottom: 16,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    position: "relative",
   },
   camera: {
-    flex: 1,
+    width: "100%",
+    height: "100%",
   },
   cameraOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: "transparent",
     padding: 16,
+    pointerEvents: "none",
   },
-  processingBadge: {
+  liveIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(244, 67, 54, 0.9)",
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 20,
     alignSelf: "flex-start",
   },
-  processingText: {
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fff",
+    marginRight: 6,
+  },
+  liveText: {
     color: "#fff",
-    marginLeft: 8,
     fontSize: 12,
+    fontWeight: "700",
   },
   feedbackCard: {
     backgroundColor: "#fff",
     padding: 16,
     borderRadius: 16,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   scoreRow: {
     flexDirection: "row",
@@ -666,12 +877,83 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#666",
     marginTop: 16,
+    textAlign: "center",
   },
   errorSubtext: {
     fontSize: 14,
     color: "#999",
     marginTop: 8,
     textAlign: "center",
+  },
+  backButtonText: {
+    color: "#FF7F50",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 32,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 400,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  modalText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-between",
+  },
+  modalButtonSecondary: {
+    flex: 1,
+    backgroundColor: "#F5F5F5",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginRight: 8,
+  },
+  modalButtonSecondaryText: {
+    color: "#666",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  modalButtonPrimary: {
+    flex: 1,
+    backgroundColor: "#FF7F50",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  modalButtonPrimaryText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
   },
 });
 
