@@ -285,7 +285,7 @@ curl http://YOUR_IP:5000/api/health
 ### Issue: "Network request failed"
 ```javascript
 // Solution: Check API_URL
-const API_URL = "http://192.168.1.6:5000"; // Use your IP, not localhost
+const API_URL = "http://192.168.1.5:5000"; // Use your IP, not localhost
 ```
 
 ### Issue: Camera not showing

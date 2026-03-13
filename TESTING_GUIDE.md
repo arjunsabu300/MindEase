@@ -50,7 +50,7 @@ npm install
 # Windows: ipconfig
 
 # Edit src/Screens/YogaSessionScreen.jsx
-# Change: const API_URL = "http://192.168.1.6:5000";
+# Change: const API_URL = "http://192.168.1.5:5000";
 # To: const API_URL = "http://YOUR_IP:5000";
 
 # Start Expo

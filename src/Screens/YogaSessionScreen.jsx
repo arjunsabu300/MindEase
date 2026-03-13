@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { Camera } from "expo-camera";
+import { Camera, CameraView } from "expo-camera";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { extractAnglesFromLandmarks, generatePoseFeedback, smoothScore, checkPoseHold } from "../utils/poseUtils";
@@ -18,10 +18,10 @@ import { getPoseTemplate } from "../utils/poseTemplates";
 import * as ImageManipulator from 'expo-image-manipulator';
 
 const { width, height } = Dimensions.get("window");
-const API_URL = "http://192.168.1.6:5000"; // Update with your backend URL
+const API_URL = "http://192.168.1.5:5000"; // Update with your backend URL
 
 export default function YogaSessionScreen({ route, navigation }) {
-  const { yogaPlan, sessionId } = route.params;
+  const { yogaPlan = [], sessionId } = route?.params || {};
   const [currentPoseIndex, setCurrentPoseIndex] = useState(0);
   const currentPose = yogaPlan[currentPoseIndex];
 
@@ -80,17 +80,29 @@ export default function YogaSessionScreen({ route, navigation }) {
      FETCH YOUTUBE VIDEO
   =============================== */
   useEffect(() => {
-    fetchVideo();
+    if (currentPose?.id) {
+      fetchVideo();
+    } else {
+      setVideoId(null);
+      setLoadingVideo(false);
+    }
   }, [currentPose]);
 
   const fetchVideo = async () => {
+    if (!currentPose?.id) {
+      setVideoId(null);
+      setLoadingVideo(false);
+      return;
+    }
+
     setLoadingVideo(true);
     try {
       const res = await fetch(`${API_URL}/api/yoga/youtube?pose=${currentPose.id}`);
       const data = await res.json();
-      setVideoId(data.videoId);
+      setVideoId(res.ok ? data?.videoId ?? null : null);
     } catch (err) {
       console.log("Video fetch error:", err);
+      setVideoId(null);
     } finally {
       setLoadingVideo(false);
     }
@@ -167,7 +179,7 @@ export default function YogaSessionScreen({ route, navigation }) {
         type: 'image/jpeg',
         name: 'pose.jpg',
       });
-      formData.append('poseId', currentPose.id);
+      formData.append('poseId', currentPose?.id || '');
 
       const response = await fetch(`${API_URL}/api/pose/analyze`, {
         method: 'POST',
@@ -233,7 +245,7 @@ export default function YogaSessionScreen({ route, navigation }) {
         body: JSON.stringify({
           sessionId,
           poseScore: finalScore,
-          poseId: currentPose.id,
+          poseId: currentPose?.id,
           feedback: feedbackData.details,
           angles: angles,
           duration: duration,
@@ -307,6 +319,16 @@ export default function YogaSessionScreen({ route, navigation }) {
     );
   }
 
+  if (!currentPose) {
+    return (
+      <View style={styles.centerContainer}>
+        <MaterialCommunityIcons name="alert-circle-outline" size={64} color="#999" />
+        <Text style={styles.errorText}>No yoga poses available</Text>
+        <Text style={styles.errorSubtext}>Please generate a yoga plan before starting the session.</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -362,22 +384,20 @@ export default function YogaSessionScreen({ route, navigation }) {
 
         {/* Camera Feed */}
         <View style={styles.cameraCard}>
-          <Camera
+          <CameraView
             ref={cameraRef}
             style={styles.camera}
-            type={Camera.Constants.Type.front}
+            facing="front"
             onCameraReady={() => setCameraReady(true)}
-          >
-            {/* Overlay */}
-            <View style={styles.cameraOverlay}>
-              {isProcessing && (
-                <View style={styles.processingBadge}>
-                  <ActivityIndicator size="small" color="#fff" />
-                  <Text style={styles.processingText}>Analyzing...</Text>
-                </View>
-              )}
-            </View>
-          </Camera>
+          />
+          <View pointerEvents="none" style={styles.cameraOverlay}>
+            {isProcessing && (
+              <View style={styles.processingBadge}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.processingText}>Analyzing...</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Live Feedback */}
@@ -542,7 +562,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cameraOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "transparent",
     padding: 16,
   },
