@@ -1,68 +1,94 @@
 @echo off
-REM MediaPipe Setup Script for Windows
-REM This script installs all required Python packages for pose detection
+setlocal
 
-echo 🚀 Setting up MediaPipe Pose Detection for Windows...
+echo Setting up MediaPipe pose detection for Windows...
 echo.
 
-REM Check if Python is installed
-python --version >nul 2>&1
+where python >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Python is not installed!
-    echo Please install Python 3.8 or higher from https://www.python.org/
+    echo [ERROR] Python was not found in PATH.
+    echo Install Python 3.10 or 3.11 and enable "Add Python to PATH".
     pause
     exit /b 1
 )
 
-echo ✅ Python found
+echo [OK] Python found
 python --version
 echo.
 
-REM Check if pip is installed
-pip --version >nul 2>&1
+if not exist venv (
+    echo Creating virtual environment...
+    python -m venv venv
+    if errorlevel 1 (
+        echo [ERROR] Failed to create virtual environment.
+        pause
+        exit /b 1
+    )
+) else (
+    echo Virtual environment already exists.
+)
+
+echo Upgrading pip...
+call venv\Scripts\python.exe -m pip install --upgrade pip
 if errorlevel 1 (
-    echo ❌ pip is not installed!
-    echo Please install pip
+    echo [ERROR] Failed to upgrade pip.
     pause
     exit /b 1
 )
 
-echo ✅ pip found
-pip --version
 echo.
+echo Installing Python dependencies...
+call venv\Scripts\python.exe -m pip install -r requirements.txt
+if errorlevel 1 (
+    echo [ERROR] Failed to install Python dependencies.
+    pause
+    exit /b 1
+)
 
-REM Create virtual environment
-echo 📦 Creating virtual environment...
-python -m venv venv
+if not exist models (
+    mkdir models
+)
 
-REM Activate virtual environment
-echo ✅ Activating virtual environment...
-call venv\Scripts\activate.bat
-
-REM Upgrade pip
-echo ⬆️  Upgrading pip...
-python -m pip install --upgrade pip
+if not exist models\pose_landmarker_lite.task (
+    echo.
+    echo Downloading MediaPipe pose model...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task' -OutFile 'models\pose_landmarker_lite.task'"
+    if errorlevel 1 (
+        echo [ERROR] Failed to download pose_landmarker_lite.task.
+        echo Download it manually and place it in backend\python\models\
+        pause
+        exit /b 1
+    )
+) else (
+    echo MediaPipe pose model already exists.
+)
 
 echo.
+echo Verifying installation...
+call venv\Scripts\python.exe -c "import mediapipe; print('MediaPipe OK')"
+if errorlevel 1 (
+    echo [ERROR] MediaPipe verification failed.
+    pause
+    exit /b 1
+)
 
-REM Install requirements
-echo 📥 Installing MediaPipe and dependencies...
-echo This may take a few minutes...
-echo.
+call venv\Scripts\python.exe -c "import cv2; print('OpenCV OK')"
+if errorlevel 1 (
+    echo [ERROR] OpenCV verification failed.
+    pause
+    exit /b 1
+)
 
-pip install -r requirements.txt
+call venv\Scripts\python.exe pose_detector.py --healthcheck
+if errorlevel 1 (
+    echo [ERROR] Pose detector healthcheck failed.
+    pause
+    exit /b 1
+)
 
 echo.
-echo ✅ Installation complete!
-echo.
-echo 📝 Installed packages:
-pip list | findstr /I "mediapipe opencv numpy Pillow"
-echo.
-echo 🎉 MediaPipe is ready to use!
-echo.
-echo To test the installation, run:
-echo   python pose_detector.py ^<path_to_image^>
+echo [OK] Windows setup completed successfully.
+echo Use this interpreter for Python checks:
+echo   venv\Scripts\python.exe
 echo.
 pause
-
-@REM Made with Bob
