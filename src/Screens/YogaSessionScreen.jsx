@@ -171,10 +171,11 @@ export default function YogaSessionScreen({ route, navigation }) {
   }, [sessionStarted, cameraReady, poseCompleted]);
 
   const startLiveTracking = () => {
-    // Process frames every 1.5 seconds for live tracking (faster than before)
+    // Process frames every 3 seconds to reduce shutter sound frequency
+    // This is a compromise between real-time feedback and user experience
     processingInterval.current = setInterval(() => {
       captureAndAnalyzePose();
-    }, 1500);
+    }, 3000); // Increased from 1.5s to 3s
 
     // Check pose hold every second
     holdCheckInterval.current = setInterval(() => {
@@ -196,13 +197,14 @@ export default function YogaSessionScreen({ route, navigation }) {
     setIsProcessing(true);
 
     try {
-      // Capture frame silently (no shutter sound)
+      // Capture frame with minimal settings
+      // Note: Expo Camera doesn't support muting shutter sound on all devices
+      // The sound is controlled by device system settings
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.4,
+        quality: 0.3, // Lower quality for faster capture
         base64: false,
         skipProcessing: true,
         exif: false,
-        mute: true, // Mute shutter sound
         isImageMirror: false,
       });
 
@@ -495,7 +497,6 @@ export default function YogaSessionScreen({ route, navigation }) {
                 facing="front"
                 onCameraReady={() => setCameraReady(true)}
                 enableTorch={false}
-                mute={true}
               />
               {/* Overlay - positioned absolutely outside CameraView */}
               <View style={styles.cameraOverlay}>
