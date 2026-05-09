@@ -22,7 +22,7 @@ import { Audio } from "expo-av";
 
 const { width } = Dimensions.get("window");
 
-// const API_URL = "https://192.168.1.2:8081/api/emotion/voice";
+// const API_URL = "https://192.168.3.55:8081/api/emotion/voice";
 
 const DashboardScreen = ({ navigation }) => {
   const [userData, setUserData] = useState(null);
@@ -60,11 +60,11 @@ const DashboardScreen = ({ navigation }) => {
 
   /* ===================== SER ===================== */
 
-// const API_URL_SER = "http://192.168.1.5:5000/api/emotion/voice";
+// const API_URL_SER = "http://192.168.3.55:5001/api/emotion/voice";
 
-// const API_URL_STT = "http://192.168.1.5:5000/api/emotion/voicetext";
+// const API_URL_STT = "http://192.168.3.55:5001/api/emotion/voicetext";
 
-const API_URL_MULTI = "http://192.168.1.5:5000/api/emotion/multimodal";
+const API_URL_MULTI = "http://192.168.3.55:5001/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -121,7 +121,7 @@ const startVoiceAnalysis = async () => {
         text: result.text_emotion,
         fusion: result.final,
     });
-    }, 5000);
+    }, 5001);
   } catch (err) {
     setLoadingSER(false);
     Alert.alert("Error", err.message);
@@ -131,7 +131,7 @@ const startVoiceAnalysis = async () => {
 
   /* ===================== FER ===================== */
 
-const API_URL_FACE = "http://192.168.1.5:5000/api/emotion/face";
+const API_URL_FACE = "http://192.168.3.55:5001/api/emotion/face";
 
 
 /* ===================== FACE ANALYSIS (FER) ===================== */

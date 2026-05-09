@@ -5,8 +5,8 @@ const { spawn } = require('child_process');
 
 /**
  * Pose Detection Service using MediaPipe
- * This service processes images and detects body pose landmarks
- * Uses Python MediaPipe for accurate pose detection
+ * Enhanced with range-based validation for realistic pose correction
+ * Accounts for camera shake, body tremors, and varying camera quality
  */
 
 class PoseDetectionService {
@@ -17,20 +17,21 @@ class PoseDetectionService {
     this.hasLoggedFallback = false;
     this.scriptPath = path.join(__dirname, '../python/pose_detector.py');
     
+    // Temporal smoothing buffer for reducing jitter
+    this.angleHistory = {};
+    this.historySize = 3; // Keep last 3 frames for smoothing
+    
     // Try to use virtual environment Python (cross-platform)
     const venvPythonMac = path.join(__dirname, '../python/venv/bin/python3');
     const venvPythonWin = path.join(__dirname, '../python/venv/Scripts/python.exe');
     
     if (fs.existsSync(venvPythonMac)) {
-      // macOS/Linux virtual environment
       this.pythonPath = venvPythonMac;
       console.log('🐍 Using virtual environment Python (macOS/Linux)');
     } else if (fs.existsSync(venvPythonWin)) {
-      // Windows virtual environment
       this.pythonPath = venvPythonWin;
       console.log('🐍 Using virtual environment Python (Windows)');
     } else {
-      // Fallback to system Python
       this.pythonPath = process.platform === 'win32' ? 'python' : 'python3';
       console.log('🐍 Using system Python (fallback)');
     }
@@ -38,7 +39,6 @@ class PoseDetectionService {
 
   /**
    * Initialize the pose detection model
-   * Checks if Python and MediaPipe are available
    */
   async initialize() {
     if (this.initializationAttempted) {
@@ -48,7 +48,6 @@ class PoseDetectionService {
     this.initializationAttempted = true;
 
     try {
-      // Check if Python script exists
       if (!fs.existsSync(this.scriptPath)) {
         console.warn('⚠️  Python MediaPipe script not found. Using fallback mode.');
         this.initialized = false;
@@ -56,7 +55,6 @@ class PoseDetectionService {
         return;
       }
 
-      // Test Python MediaPipe availability
       const testResult = await this.testPythonMediaPipe();
       
       if (testResult.success) {
@@ -65,7 +63,7 @@ class PoseDetectionService {
         console.log('✅ MediaPipe pose detection initialized (Python)');
       } else {
         console.warn('⚠️  MediaPipe not available:', testResult.error);
-        console.warn('⚠️  Using fallback pose detection until MediaPipe model/assets are available.');
+        console.warn('⚠️  Using fallback pose detection.');
         this.initialized = false;
         this.usingFallback = true;
       }
@@ -120,21 +118,17 @@ class PoseDetectionService {
 
   /**
    * Detect pose from image file using Python MediaPipe
-   * @param {string} imagePath - Path to the image file
-   * @returns {Object} Pose landmarks and metadata
    */
   async detectPoseFromImage(imagePath) {
     if (!this.initializationAttempted) {
       await this.initialize();
     }
 
-    // If MediaPipe not available, use fallback
     if (!this.initialized) {
       return this.fallbackDetection(imagePath);
     }
 
     try {
-      // Call Python MediaPipe script
       const result = await this.callPythonMediaPipe(imagePath);
       
       if (result.success && result.detected) {
@@ -160,9 +154,6 @@ class PoseDetectionService {
       console.error('MediaPipe detection error:', error);
       this.initialized = false;
       this.usingFallback = true;
-      this.usingFallback = true;
-      this.usingFallback = true;
-      // Fallback to mock detection
       return this.fallbackDetection(imagePath);
     }
   }
@@ -202,7 +193,6 @@ class PoseDetectionService {
         reject(error);
       });
 
-      // Timeout after 10 seconds
       setTimeout(() => {
         process.kill();
         reject(new Error('MediaPipe process timeout'));
@@ -212,7 +202,6 @@ class PoseDetectionService {
 
   /**
    * Fallback detection when MediaPipe is not available
-   * Generates realistic mock landmarks for testing
    */
   async fallbackDetection(imagePath) {
     if (!this.hasLoggedFallback) {
@@ -243,100 +232,173 @@ class PoseDetectionService {
 
   /**
    * Generate mock pose landmarks for testing
-   * Returns 33 landmarks matching MediaPipe Pose format
    */
   generateMockLandmarks() {
-    // Generate realistic pose landmarks with some variation
-    const variation = () => (Math.random() - 0.5) * 0.05; // ±2.5% variation
+    const variation = () => (Math.random() - 0.5) * 0.05;
     
     const landmarks = [
-      // 0-10: Face landmarks (nose, eyes, ears, mouth)
-      { x: 0.5 + variation(), y: 0.15 + variation(), z: 0, visibility: 0.99 }, // 0: nose
-      { x: 0.48 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 }, // 1: left eye inner
-      { x: 0.47 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 }, // 2: left eye
-      { x: 0.46 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 }, // 3: left eye outer
-      { x: 0.52 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 }, // 4: right eye inner
-      { x: 0.53 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 }, // 5: right eye
-      { x: 0.54 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 }, // 6: right eye outer
-      { x: 0.44 + variation(), y: 0.16 + variation(), z: 0, visibility: 0.99 }, // 7: left ear
-      { x: 0.56 + variation(), y: 0.16 + variation(), z: 0, visibility: 0.99 }, // 8: right ear
-      { x: 0.48 + variation(), y: 0.18 + variation(), z: 0, visibility: 0.99 }, // 9: mouth left
-      { x: 0.52 + variation(), y: 0.18 + variation(), z: 0, visibility: 0.99 }, // 10: mouth right
+      // 0-10: Face landmarks
+      { x: 0.5 + variation(), y: 0.15 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.48 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.47 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.46 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.52 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.53 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.54 + variation(), y: 0.14 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.44 + variation(), y: 0.16 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.56 + variation(), y: 0.16 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.48 + variation(), y: 0.18 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.52 + variation(), y: 0.18 + variation(), z: 0, visibility: 0.99 },
       
       // 11-12: Shoulders
-      { x: 0.42 + variation(), y: 0.30 + variation(), z: 0, visibility: 0.99 }, // 11: left shoulder
-      { x: 0.58 + variation(), y: 0.30 + variation(), z: 0, visibility: 0.99 }, // 12: right shoulder
+      { x: 0.42 + variation(), y: 0.30 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.58 + variation(), y: 0.30 + variation(), z: 0, visibility: 0.99 },
       
       // 13-16: Arms
-      { x: 0.38 + variation(), y: 0.45 + variation(), z: 0, visibility: 0.99 }, // 13: left elbow
-      { x: 0.62 + variation(), y: 0.45 + variation(), z: 0, visibility: 0.99 }, // 14: right elbow
-      { x: 0.35 + variation(), y: 0.60 + variation(), z: 0, visibility: 0.99 }, // 15: left wrist
-      { x: 0.65 + variation(), y: 0.60 + variation(), z: 0, visibility: 0.99 }, // 16: right wrist
+      { x: 0.38 + variation(), y: 0.45 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.62 + variation(), y: 0.45 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.35 + variation(), y: 0.60 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.65 + variation(), y: 0.60 + variation(), z: 0, visibility: 0.99 },
       
       // 17-22: Hands
-      { x: 0.34 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 }, // 17: left pinky
-      { x: 0.33 + variation(), y: 0.61 + variation(), z: 0, visibility: 0.95 }, // 18: left index
-      { x: 0.32 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 }, // 19: left thumb
-      { x: 0.66 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 }, // 20: right pinky
-      { x: 0.67 + variation(), y: 0.61 + variation(), z: 0, visibility: 0.95 }, // 21: right index
-      { x: 0.68 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 }, // 22: right thumb
+      { x: 0.34 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.33 + variation(), y: 0.61 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.32 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.66 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.67 + variation(), y: 0.61 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.68 + variation(), y: 0.62 + variation(), z: 0, visibility: 0.95 },
       
       // 23-24: Hips
-      { x: 0.45 + variation(), y: 0.65 + variation(), z: 0, visibility: 0.99 }, // 23: left hip
-      { x: 0.55 + variation(), y: 0.65 + variation(), z: 0, visibility: 0.99 }, // 24: right hip
+      { x: 0.45 + variation(), y: 0.65 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.55 + variation(), y: 0.65 + variation(), z: 0, visibility: 0.99 },
       
       // 25-28: Legs
-      { x: 0.44 + variation(), y: 0.80 + variation(), z: 0, visibility: 0.99 }, // 25: left knee
-      { x: 0.56 + variation(), y: 0.80 + variation(), z: 0, visibility: 0.99 }, // 26: right knee
-      { x: 0.43 + variation(), y: 0.95 + variation(), z: 0, visibility: 0.99 }, // 27: left ankle
-      { x: 0.57 + variation(), y: 0.95 + variation(), z: 0, visibility: 0.99 }, // 28: right ankle
+      { x: 0.44 + variation(), y: 0.80 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.56 + variation(), y: 0.80 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.43 + variation(), y: 0.95 + variation(), z: 0, visibility: 0.99 },
+      { x: 0.57 + variation(), y: 0.95 + variation(), z: 0, visibility: 0.99 },
       
       // 29-32: Feet
-      { x: 0.42 + variation(), y: 0.98 + variation(), z: 0, visibility: 0.95 }, // 29: left heel
-      { x: 0.58 + variation(), y: 0.98 + variation(), z: 0, visibility: 0.95 }, // 30: right heel
-      { x: 0.41 + variation(), y: 0.99 + variation(), z: 0, visibility: 0.95 }, // 31: left foot index
-      { x: 0.59 + variation(), y: 0.99 + variation(), z: 0, visibility: 0.95 }, // 32: right foot index
+      { x: 0.42 + variation(), y: 0.98 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.58 + variation(), y: 0.98 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.41 + variation(), y: 0.99 + variation(), z: 0, visibility: 0.95 },
+      { x: 0.59 + variation(), y: 0.99 + variation(), z: 0, visibility: 0.95 },
     ];
     
     return landmarks;
   }
 
   /**
-   * Validate pose against reference template
-   * @param {Array} landmarks - Detected pose landmarks
-   * @param {Object} referenceTemplate - Reference pose template
-   * @returns {Object} Validation results with score and feedback
+   * Validate pose against reference template with enhanced range-based validation
    */
   validatePose(landmarks, referenceTemplate) {
-    if (!landmarks || !referenceTemplate) {
+    // Return score 0 if no landmarks detected
+    if (!landmarks || landmarks.length === 0) {
       return {
         valid: false,
         score: 0,
-        feedback: 'Unable to detect pose'
+        feedback: {
+          overall: 'No person detected in camera. Please position yourself in view.',
+          details: [{
+            joint: 'detection',
+            message: 'Step into camera view',
+            severity: 'high'
+          }]
+        },
+        angles: {},
+        angleDetails: {}
+      };
+    }
+
+    if (!referenceTemplate) {
+      return {
+        valid: false,
+        score: 0,
+        feedback: {
+          overall: 'Unable to validate pose - no reference template',
+          details: []
+        }
       };
     }
 
     try {
-      // Calculate angles from landmarks
       const userAngles = this.extractAngles(landmarks);
       
-      // Compare with reference
-      const comparison = this.compareAngles(userAngles, referenceTemplate.keyAngles);
+      // Check if angles were successfully extracted
+      if (Object.keys(userAngles).length === 0) {
+        return {
+          valid: false,
+          score: 0,
+          feedback: {
+            overall: 'Unable to detect body joints. Please ensure full body is visible.',
+            details: [{
+              joint: 'visibility',
+              message: 'Move back to show full body',
+              severity: 'high'
+            }]
+          },
+          angles: {},
+          angleDetails: {}
+        };
+      }
+      
+      // Apply temporal smoothing to reduce jitter
+      const smoothedAngles = this.applySmoothingToAngles(userAngles);
+      
+      // Pass pose name for critical validation
+      const poseName = referenceTemplate.name ?
+        Object.keys(require('../utils/poseTemplates').poseTemplates).find(
+          key => require('../utils/poseTemplates').poseTemplates[key].name === referenceTemplate.name
+        ) : '';
+      
+      const comparison = this.compareAnglesWithRanges(smoothedAngles, referenceTemplate.keyAngles, poseName);
       
       return {
-        valid: comparison.score >= 70,
+        valid: comparison.score >= 50, // More liberal threshold (was 60)
         score: comparison.score,
         feedback: comparison.feedback,
-        angles: userAngles
+        angles: smoothedAngles,
+        angleDetails: comparison.angleDetails
       };
     } catch (error) {
       console.error('Pose validation error:', error);
       return {
         valid: false,
         score: 0,
-        feedback: 'Validation error occurred'
+        feedback: {
+          overall: 'Validation error occurred',
+          details: []
+        }
       };
     }
+  }
+
+  /**
+   * Apply temporal smoothing to angles to reduce jitter from camera shake
+   */
+  applySmoothingToAngles(currentAngles) {
+    const smoothedAngles = {};
+    
+    Object.keys(currentAngles).forEach(key => {
+      // Initialize history for this joint if not exists
+      if (!this.angleHistory[key]) {
+        this.angleHistory[key] = [];
+      }
+      
+      // Add current angle to history
+      this.angleHistory[key].push(currentAngles[key]);
+      
+      // Keep only last N frames
+      if (this.angleHistory[key].length > this.historySize) {
+        this.angleHistory[key].shift();
+      }
+      
+      // Calculate moving average
+      const sum = this.angleHistory[key].reduce((a, b) => a + b, 0);
+      smoothedAngles[key] = sum / this.angleHistory[key].length;
+    });
+    
+    return smoothedAngles;
   }
 
   /**
@@ -346,58 +408,36 @@ class PoseDetectionService {
     const angles = {};
 
     try {
-      // Left knee angle
       angles.leftKnee = this.calculateAngle(
-        landmarks[23], // left hip
-        landmarks[25], // left knee
-        landmarks[27]  // left ankle
+        landmarks[23], landmarks[25], landmarks[27]
       );
 
-      // Right knee angle
       angles.rightKnee = this.calculateAngle(
-        landmarks[24], // right hip
-        landmarks[26], // right knee
-        landmarks[28]  // right ankle
+        landmarks[24], landmarks[26], landmarks[28]
       );
 
-      // Left elbow angle
       angles.leftElbow = this.calculateAngle(
-        landmarks[11], // left shoulder
-        landmarks[13], // left elbow
-        landmarks[15]  // left wrist
+        landmarks[11], landmarks[13], landmarks[15]
       );
 
-      // Right elbow angle
       angles.rightElbow = this.calculateAngle(
-        landmarks[12], // right shoulder
-        landmarks[14], // right elbow
-        landmarks[16]  // right wrist
+        landmarks[12], landmarks[14], landmarks[16]
       );
 
-      // Hip angles
       angles.leftHip = this.calculateAngle(
-        landmarks[11], // left shoulder
-        landmarks[23], // left hip
-        landmarks[25]  // left knee
+        landmarks[11], landmarks[23], landmarks[25]
       );
 
       angles.rightHip = this.calculateAngle(
-        landmarks[12], // right shoulder
-        landmarks[24], // right hip
-        landmarks[26]  // right knee
+        landmarks[12], landmarks[24], landmarks[26]
       );
 
-      // Shoulder angles
       angles.leftShoulder = this.calculateAngle(
-        landmarks[23], // left hip
-        landmarks[11], // left shoulder
-        landmarks[13]  // left elbow
+        landmarks[23], landmarks[11], landmarks[13]
       );
 
       angles.rightShoulder = this.calculateAngle(
-        landmarks[24], // right hip
-        landmarks[12], // right shoulder
-        landmarks[14]  // right elbow
+        landmarks[24], landmarks[12], landmarks[14]
       );
 
       // Spine angle
@@ -440,40 +480,292 @@ class PoseDetectionService {
   }
 
   /**
-   * Compare user angles with reference angles
+   * Check if user is attempting the pose (generic validation)
+   * Detects if angles are significantly different from reference
    */
-  compareAngles(userAngles, referenceAngles) {
+  checkCriticalPoseRequirements(poseName, userAngles, referenceAngles) {
+    const criticalIssues = [];
+    let criticalMismatches = 0;
+    let totalCriticalJoints = 0;
+    const mismatchDetails = [];
+    
+    // Check each reference angle to see if user is attempting the pose
+    Object.keys(referenceAngles).forEach(key => {
+      if (userAngles[key] !== undefined) {
+        const reference = referenceAngles[key];
+        const userAngle = userAngles[key];
+        const targetAngle = reference.angle;
+        const tolerance = reference.tolerance || 15;
+        const diff = Math.abs(userAngle - targetAngle);
+        
+        // Critical joints that define the pose
+        const criticalJoints = ['leftKnee', 'rightKnee', 'leftHip', 'rightHip', 'spine', 'bentKnee', 'standingKnee'];
+        
+        if (criticalJoints.includes(key)) {
+          totalCriticalJoints++;
+          
+          // If angle is way off (more than 1.5x tolerance), it's a critical mismatch
+          if (diff > tolerance * 1.5) {
+            criticalMismatches++;
+            mismatchDetails.push({
+              joint: key,
+              userAngle: Math.round(userAngle),
+              targetAngle: targetAngle,
+              diff: Math.round(diff),
+              tolerance: tolerance
+            });
+          }
+        }
+      }
+    });
+    
+    // Log for debugging
+    console.log(`🔍 Pose Check: ${totalCriticalJoints} critical joints, ${criticalMismatches} mismatches (${Math.round(criticalMismatches/totalCriticalJoints*100)}%)`);
+    if (mismatchDetails.length > 0) {
+      console.log('Mismatches:', mismatchDetails);
+    }
+    
+    // If more than 70% of critical joints are way off, user is not attempting the pose
+    // Made less strict to avoid false positives
+    if (totalCriticalJoints > 0 && (criticalMismatches / totalCriticalJoints) > 0.7) {
+      criticalIssues.push({
+        message: 'Position yourself to match the pose. Watch the tutorial for guidance.',
+        severity: 'critical'
+      });
+    }
+    
+    return criticalIssues;
+  }
+
+  /**
+   * Compare user angles with reference angles using RANGE-BASED validation
+   * This accounts for camera shake, body tremors, and varying camera quality
+   */
+  compareAnglesWithRanges(userAngles, referenceAngles, poseName = '') {
     let totalScore = 0;
+    let weightedScore = 0;
+    let totalWeight = 0;
     let count = 0;
     const feedback = [];
+    const angleDetails = {};
+
+    // Check critical pose requirements first (prevents false positives)
+    const criticalIssues = this.checkCriticalPoseRequirements(poseName, userAngles, referenceAngles);
+    
+    // If critical requirements not met, return low score with specific feedback
+    if (criticalIssues.length > 0) {
+      return {
+        score: 20, // Very low score for not attempting the pose
+        feedback: criticalIssues, // Return as array for frontend
+        feedbackSummary: {
+          overall: 'Not in correct pose position',
+          details: criticalIssues
+        },
+        angleDetails: {}
+      };
+    }
+
+    // Joint importance weights (critical joints have higher weight)
+    const jointWeights = {
+      leftKnee: 1.2,
+      rightKnee: 1.2,
+      leftHip: 1.1,
+      rightHip: 1.1,
+      spine: 1.3,
+      leftShoulder: 1.0,
+      rightShoulder: 1.0,
+      leftElbow: 0.9,
+      rightElbow: 0.9,
+      standingKnee: 1.3,
+      bentKnee: 1.3
+    };
 
     Object.keys(referenceAngles).forEach(key => {
       if (userAngles[key] !== undefined) {
         const reference = referenceAngles[key];
-        const diff = Math.abs(userAngles[key] - reference.angle);
+        const userAngle = userAngles[key];
+        const targetAngle = reference.angle;
         const tolerance = reference.tolerance || 15;
+        const weight = jointWeights[key] || 1.0;
+
+        // Calculate angle difference
+        const diff = Math.abs(userAngle - targetAngle);
         
-        const score = Math.max(0, 100 - (diff / tolerance) * 100);
-        totalScore += score;
+        // Define LIBERAL RANGES for scoring (realistic and achievable)
+        const minAcceptable = targetAngle - tolerance;
+        const maxAcceptable = targetAngle + tolerance;
+        const minGood = targetAngle - (tolerance * 0.6);
+        const maxGood = targetAngle + (tolerance * 0.6);
+        const minPerfect = targetAngle - (tolerance * 0.3);
+        const maxPerfect = targetAngle + (tolerance * 0.3);
+
+        // Calculate score based on LIBERAL ranges (0-100)
+        let angleScore = 0;
+        let status = 'poor';
+        
+        if (userAngle >= minPerfect && userAngle <= maxPerfect) {
+          // Perfect range: 85-100 points (within 30% of tolerance)
+          angleScore = 85 + (15 * (1 - (diff / (tolerance * 0.3))));
+          status = 'perfect';
+        } else if (userAngle >= minGood && userAngle <= maxGood) {
+          // Good range: 70-85 points (within 60% of tolerance)
+          const goodDiff = Math.min(
+            Math.abs(userAngle - minGood),
+            Math.abs(userAngle - maxGood)
+          );
+          angleScore = 70 + (15 * (1 - (goodDiff / (tolerance * 0.4))));
+          status = 'good';
+        } else if (userAngle >= minAcceptable && userAngle <= maxAcceptable) {
+          // Acceptable range: 55-70 points (within full tolerance)
+          const acceptableDiff = Math.min(
+            Math.abs(userAngle - minAcceptable),
+            Math.abs(userAngle - maxAcceptable)
+          );
+          angleScore = 55 + (15 * (1 - (acceptableDiff / tolerance)));
+          status = 'acceptable';
+        } else {
+          // Outside acceptable range: 0-55 points (gradual penalty)
+          const excessDiff = diff - tolerance;
+          angleScore = Math.max(0, 55 - (excessDiff * 1.5));
+          status = 'needs_adjustment';
+        }
+
+        // Apply weight to score
+        weightedScore += angleScore * weight;
+        totalWeight += weight;
+        totalScore += angleScore;
         count++;
 
-        if (diff > tolerance) {
-          const adjustment = userAngles[key] > reference.angle ? 'decrease' : 'increase';
+        // Store angle details
+        angleDetails[key] = {
+          current: Math.round(userAngle),
+          target: targetAngle,
+          diff: Math.round(diff),
+          score: Math.round(angleScore),
+          status: status,
+          range: `${Math.round(minAcceptable)}-${Math.round(maxAcceptable)}°`
+        };
+
+        // Generate actionable feedback based on status
+        if (status === 'needs_adjustment') {
+          const severity = diff > tolerance * 2 ? 'high' : diff > tolerance * 1.5 ? 'medium' : 'low';
+          const actionableMessage = this.generateActionableFeedback(key, userAngle - targetAngle, userAngle, targetAngle);
+          
           feedback.push({
             joint: key,
-            message: `${this.formatJointName(key)}: ${adjustment} angle by ${Math.round(diff)}°`,
-            severity: diff > tolerance * 1.5 ? 'high' : 'medium'
+            message: actionableMessage,
+            severity: severity,
+            current: Math.round(userAngle),
+            target: targetAngle
+          });
+        } else if (status === 'acceptable') {
+          const actionableMessage = this.generateActionableFeedback(key, userAngle - targetAngle, userAngle, targetAngle);
+          
+          feedback.push({
+            joint: key,
+            message: `${actionableMessage} - Almost there!`,
+            severity: 'low',
+            current: Math.round(userAngle),
+            target: targetAngle
           });
         }
       }
     });
 
+    // Calculate final scores
     const averageScore = count > 0 ? totalScore / count : 0;
+    const finalScore = totalWeight > 0 ? weightedScore / totalWeight : averageScore;
+
+    // Generate overall feedback message (BALANCED thresholds)
+    let overallMessage = '';
+    if (finalScore >= 80) {
+      overallMessage = 'Excellent form! Perfect execution! 🌟';
+    } else if (finalScore >= 70) {
+      overallMessage = 'Great job! You\'re doing well 👍';
+    } else if (finalScore >= 60) {
+      overallMessage = 'Good effort! Keep adjusting 💪';
+    } else if (finalScore >= 50) {
+      overallMessage = 'Getting there! Focus on corrections 🎯';
+    } else if (finalScore >= 30) {
+      overallMessage = 'Keep practicing! Watch the tutorial again 📹';
+    } else {
+      overallMessage = 'Position yourself correctly and try again 🔄';
+    }
+
+    // Sort feedback by severity (high -> medium -> low)
+    const severityOrder = { high: 0, medium: 1, low: 2 };
+    feedback.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+    // Limit feedback to top 3 most important issues
+    const topFeedback = feedback.slice(0, 3);
+
+    // Return feedback as array for frontend compatibility
+    const feedbackArray = topFeedback.length > 0 ? topFeedback.map(f => ({
+      ...f,
+      message: f.message
+    })) : [
+      {
+        joint: 'overall',
+        message: overallMessage,
+        severity: 'success'
+      }
+    ];
 
     return {
-      score: averageScore,
-      feedback: feedback.length > 0 ? feedback : [{ message: 'Good form!', severity: 'low' }]
+      score: Math.round(finalScore),
+      averageScore: Math.round(averageScore),
+      feedback: feedbackArray, // Array format for frontend
+      feedbackSummary: {
+        overall: overallMessage,
+        details: topFeedback
+      },
+      angleDetails: angleDetails,
+      jointsAnalyzed: count
     };
+  }
+
+  /**
+   * Generate actionable feedback based on joint and angle difference
+   */
+  generateActionableFeedback(jointName, angleDiff, currentAngle, targetAngle) {
+    const absAngleDiff = Math.abs(angleDiff);
+    const needsMore = angleDiff < 0; // Current angle is less than target
+    
+    // Map joint names to actionable instructions
+    const feedbackMap = {
+      // Knee joints
+      leftKnee: needsMore ? 'Straighten your left leg more' : 'Bend your left knee more',
+      rightKnee: needsMore ? 'Straighten your right leg more' : 'Bend your right knee more',
+      
+      // Hip joints
+      leftHip: needsMore ? 'Lift your left hip higher' : 'Lower your left hip',
+      rightHip: needsMore ? 'Lift your right hip higher' : 'Lower your right hip',
+      
+      // Shoulder joints
+      leftShoulder: needsMore ? 'Raise your left shoulder' : 'Lower your left shoulder and relax',
+      rightShoulder: needsMore ? 'Raise your right shoulder' : 'Lower your right shoulder and relax',
+      
+      // Elbow joints
+      leftElbow: needsMore ? 'Straighten your left arm' : 'Bend your left elbow more',
+      rightElbow: needsMore ? 'Straighten your right arm' : 'Bend your right elbow more',
+      
+      // Spine
+      spine: needsMore ? 'Straighten your back more' : 'Relax your spine slightly',
+      
+      // Standing/bent knee (for tree pose, etc.)
+      standingKnee: needsMore ? 'Straighten your standing leg completely' : 'Slightly bend your standing knee',
+      bentKnee: needsMore ? 'Straighten your bent leg more' : 'Bend your knee deeper'
+    };
+    
+    // Get base instruction
+    let instruction = feedbackMap[jointName] || `Adjust your ${jointName}`;
+    
+    // Add degree information for significant differences
+    if (absAngleDiff > 20) {
+      instruction += ` (${Math.round(absAngleDiff)}° off)`;
+    }
+    
+    return instruction;
   }
 
   /**
@@ -495,6 +787,13 @@ class PoseDetectionService {
   }
 
   /**
+   * Reset angle history (call when switching poses)
+   */
+  resetAngleHistory() {
+    this.angleHistory = {};
+  }
+
+  /**
    * Clean up resources
    */
   async cleanup() {
@@ -502,6 +801,7 @@ class PoseDetectionService {
     this.initializationAttempted = false;
     this.usingFallback = false;
     this.hasLoggedFallback = false;
+    this.angleHistory = {};
     console.log('Pose detection service cleaned up');
   }
 }
@@ -509,4 +809,4 @@ class PoseDetectionService {
 // Export singleton instance
 module.exports = new PoseDetectionService();
 
-// Made with Bob
+// Made with Bob - Enhanced Pose Detection Service

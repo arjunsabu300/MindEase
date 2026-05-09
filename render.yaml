@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: mindease-backend
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: cd backend && npm install && cd python && chmod +x setup.sh && ./setup.sh
+    startCommand: cd backend && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+    autoDeploy: true
+
+# Made with Bob

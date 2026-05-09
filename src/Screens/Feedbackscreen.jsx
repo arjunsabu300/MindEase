@@ -3,7 +3,7 @@ import { View, Alert } from "react-native";
 import { Text, Button, Title } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_URL_FEEDBACK = "http://192.168.1.5:5000/api/feedback";
+const API_URL_FEEDBACK = "http://192.168.3.55:5001/api/feedback";
 
 export default function FeedbackScreen({ route, navigation }) {
   const { sessionId, userId: routeUserId, completed = true, completionRatio = 1 } = route.params || {};
