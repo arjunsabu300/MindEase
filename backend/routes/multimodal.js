@@ -68,21 +68,21 @@ router.post("/multimodal", upload, async (req, res) => {
     let textEmotion = null;
 
     if (audioFile) {
-      const buildAudioForm = () => {
-        const fd = new FormData();
-        fd.append("audio", fs.createReadStream(audioFile.path));
-        return fd;
-      };
-
-      // SER
-      const serRes = await axios.post(SER_URL, buildAudioForm(), {
-        headers: buildAudioForm().getHeaders(),
+      // SER - Create fresh form data
+      const serForm = new FormData();
+      serForm.append("audio", fs.createReadStream(audioFile.path));
+      
+      const serRes = await axios.post(SER_URL, serForm, {
+        headers: serForm.getHeaders(),
         timeout: 60000
       });
 
-      // STT + Text Emotion
-      const sttRes = await axios.post(STT_URL, buildAudioForm(), {
-        headers: buildAudioForm().getHeaders(),
+      // STT + Text Emotion - Create fresh form data with new stream
+      const sttForm = new FormData();
+      sttForm.append("audio", fs.createReadStream(audioFile.path));
+      
+      const sttRes = await axios.post(STT_URL, sttForm, {
+        headers: sttForm.getHeaders(),
         timeout: 60000
       });
 
