@@ -24,7 +24,7 @@ const upload = multer({
   }
 });
 
-const MULTIMODAL_URL = "http://192.168.3.55:5001/api/emotion/multimodal"; // Adjust port if needed
+const MULTIMODAL_URL = "https://mindease-euf7.onrender.com/api/emotion/multimodal";
 
 const FRAME_TIMES = ["0.5", "1", "1.5", "2.2", "3"];
 
@@ -130,13 +130,13 @@ router.post("/video", upload.single("video"), async (req, res) => {
       contentType: "image/jpeg"
     });
 
-    // Send to multimodal endpoint
+    // Send to multimodal endpoint with increased timeout
     const multimodalRes = await axios.post(MULTIMODAL_URL, multimodalForm, {
       headers: {
         ...multimodalForm.getHeaders(),
         "Content-Type": `multipart/form-data; boundary=${multimodalForm._boundary}`
       },
-      timeout: 60000,
+      timeout: 180000, // 3 minutes for video processing
     });
 
 
