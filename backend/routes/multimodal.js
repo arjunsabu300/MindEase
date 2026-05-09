@@ -45,7 +45,7 @@ router.post("/multimodal", upload, async (req, res) => {
 
         const faceRes = await axios.post(FER_URL, fd, {
           headers: fd.getHeaders(),
-          timeout: 30000
+          timeout: 120000
         });
 
         face = {
@@ -68,35 +68,46 @@ router.post("/multimodal", upload, async (req, res) => {
     let textEmotion = null;
 
     if (audioFile) {
-      // SER - Create fresh form data
-      const serForm = new FormData();
-      serForm.append("audio", fs.createReadStream(audioFile.path));
-      
-      const serRes = await axios.post(SER_URL, serForm, {
-        headers: serForm.getHeaders(),
-        timeout: 60000
-      });
+      try {
+        // SER - Create fresh form data
+        const serForm = new FormData();
+        serForm.append("audio", fs.createReadStream(audioFile.path));
+        
+        console.log("Calling SER API...");
+        const serRes = await axios.post(SER_URL, serForm, {
+          headers: serForm.getHeaders(),
+          timeout: 120000 // 2 minutes
+        });
+        console.log("SER Response:", serRes.data);
 
-      // STT + Text Emotion - Create fresh form data with new stream
-      const sttForm = new FormData();
-      sttForm.append("audio", fs.createReadStream(audioFile.path));
-      
-      const sttRes = await axios.post(STT_URL, sttForm, {
-        headers: sttForm.getHeaders(),
-        timeout: 60000
-      });
+        // STT + Text Emotion - Create fresh form data with new stream
+        const sttForm = new FormData();
+        sttForm.append("audio", fs.createReadStream(audioFile.path));
+        
+        console.log("Calling STT API...");
+        const sttRes = await axios.post(STT_URL, sttForm, {
+          headers: sttForm.getHeaders(),
+          timeout: 120000 // 2 minutes
+        });
+        console.log("STT Response:", sttRes.data);
 
-      fs.unlinkSync(audioFile.path);
+        voice = {
+          emotion: normalizeEmotion(serRes.data.emotion),
+          confidence: serRes.data.confidence
+        };
 
-      voice = {
-        emotion: normalizeEmotion(serRes.data.emotion),
-        confidence: serRes.data.confidence
-      };
-
-      textEmotion = {
-        emotion: normalizeEmotion(sttRes.data.emotion),
-        confidence: sttRes.data.confidence
-      };
+        textEmotion = {
+          emotion: normalizeEmotion(sttRes.data.emotion),
+          confidence: sttRes.data.confidence
+        };
+      } catch (audioError) {
+        console.error("Audio processing error:", audioError.message);
+        // Continue without audio data if it fails
+      } finally {
+        if (fs.existsSync(audioFile.path)) {
+          fs.unlinkSync(audioFile.path);
+        }
+      }
     }
 
     /* ---------------------------------------------------
