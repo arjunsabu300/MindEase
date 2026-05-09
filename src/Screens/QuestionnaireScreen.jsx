@@ -29,7 +29,7 @@ export default function QuestionnaireScreen({ route, navigation }) {
     try {
 
       const response = await fetch(
-        "http://192.168.3.55:5001/api/emotion/resolve",
+        "https://mindease-euf7.onrender.com/api/emotion/resolve",
         {
           method: "POST",
           headers: {

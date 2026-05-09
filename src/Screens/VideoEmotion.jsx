@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Text, TouchableOpacity } from 'react-native';
 import { Upload, Camera } from 'lucide-react-native';
 
-const API_URL_VIDEO = "http://192.168.3.55:5001/api/emotion/video";
+const API_URL_VIDEO = "https://mindease-euf7.onrender.com/api/emotion/video";
 
 export default function VideoEmotion({ navigation }) {
 
