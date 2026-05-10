@@ -13,9 +13,12 @@ class PoseDetectionService {
   constructor() {
     this.initialized = false;
     this.initializationAttempted = false;
+    this.initializationPromise = null;
     this.usingFallback = false;
     this.hasLoggedFallback = false;
     this.scriptPath = path.join(__dirname, '../python/pose_detector.py');
+    this.healthcheckTimeoutMs = this.getPositiveIntegerEnv('MEDIAPIPE_HEALTHCHECK_TIMEOUT_MS', 60000);
+    this.detectionTimeoutMs = this.getPositiveIntegerEnv('MEDIAPIPE_DETECTION_TIMEOUT_MS', 45000);
     
     // Temporal smoothing buffer for reducing jitter
     this.angleHistory = {};
@@ -46,16 +49,33 @@ class PoseDetectionService {
     }
   }
 
+  getPositiveIntegerEnv(name, defaultValue) {
+    const value = Number.parseInt(process.env[name], 10);
+    return Number.isFinite(value) && value > 0 ? value : defaultValue;
+  }
+
   /**
    * Initialize the pose detection model
    */
   async initialize() {
-    if (this.initializationAttempted) {
+    if (this.initialized) {
       return;
     }
 
-    this.initializationAttempted = true;
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
 
+    this.initializationAttempted = true;
+    this.initializationPromise = this.performInitialization()
+      .finally(() => {
+        this.initializationPromise = null;
+      });
+
+    return this.initializationPromise;
+  }
+
+  async performInitialization() {
     try {
       if (!fs.existsSync(this.scriptPath)) {
         console.warn('⚠️  Python MediaPipe script not found. Using fallback mode.');
@@ -79,6 +99,7 @@ class PoseDetectionService {
     } catch (error) {
       console.error('❌ Failed to initialize pose detection:', error);
       this.initialized = false;
+      this.usingFallback = true;
     }
   }
 
@@ -91,59 +112,116 @@ class PoseDetectionService {
       console.log('   Python path:', this.pythonPath);
       console.log('   Script path:', this.scriptPath);
       
-      const process = spawn(this.pythonPath, [this.scriptPath, '--healthcheck']);
-      
-      let output = '';
-      let errorOutput = '';
-      process.stdout.on('data', (data) => {
-        output += data.toString();
-      });
+      this.runPythonMediaPipe(['--healthcheck'], this.healthcheckTimeoutMs)
+        .then(({ code, output, errorOutput }) => {
+          console.log('   Exit code:', code);
+          console.log('   Output:', output);
+          if (errorOutput) console.log('   Error output:', errorOutput);
 
-      process.stderr.on('data', (data) => {
-        errorOutput += data.toString();
-      });
-
-      process.on('close', (code) => {
-        console.log('   Exit code:', code);
-        console.log('   Output:', output);
-        if (errorOutput) console.log('   Error output:', errorOutput);
-        
-        try {
-          const result = JSON.parse(output);
-          if (result.success && result.ready) {
-            console.log('✅ MediaPipe test passed!');
-            resolve({ success: true });
+          if (code !== 0) {
+            resolve({
+              success: false,
+              error: errorOutput || output || `Healthcheck failed with exit code ${code}`,
+            });
             return;
           }
 
-          console.log('❌ MediaPipe test failed:', result.error);
-          resolve({
-            success: false,
-            error: result.error || 'MediaPipe detector is not ready',
-          });
-        } catch (error) {
-          console.log('❌ Failed to parse output:', error.message);
-          resolve({
-            success: false,
-            error: errorOutput || output || `Healthcheck failed with exit code ${code}`,
-          });
-        }
+          try {
+            const result = JSON.parse(output);
+            if (result.success && result.ready) {
+              console.log('✅ MediaPipe test passed!');
+              resolve({ success: true });
+              return;
+            }
+
+            console.log('❌ MediaPipe test failed:', result.error);
+            resolve({
+              success: false,
+              error: result.error || 'MediaPipe detector is not ready',
+            });
+          } catch (error) {
+            console.log('❌ Failed to parse output:', error.message);
+            resolve({
+              success: false,
+              error: errorOutput || output || `Healthcheck failed with exit code ${code}`,
+            });
+          }
+        })
+        .catch((error) => {
+          console.log('❌ Process error:', error.message);
+          resolve({ success: false, error: error.message });
+        });
+    });
+  }
+
+  /**
+   * Run the Python MediaPipe script with timeout-safe child process handling
+   */
+  async runPythonMediaPipe(args, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(this.pythonPath, [this.scriptPath, ...args], {
+        env: {
+          ...process.env,
+          TF_CPP_MIN_LOG_LEVEL: process.env.TF_CPP_MIN_LOG_LEVEL || '2',
+          GLOG_minloglevel: process.env.GLOG_minloglevel || '2',
+        },
       });
 
-      process.on('error', (error) => {
-        console.log('❌ Process error:', error.message);
-        resolve({ success: false, error: error.message });
+      let settled = false;
+      let output = '';
+      let errorOutput = '';
+      let timeout;
+
+      const finish = (callback, value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        callback(value);
+      };
+
+      timeout = setTimeout(() => {
+        finish(reject, new Error(`MediaPipe process timeout after ${timeoutMs}ms`));
+        child.kill('SIGKILL');
+      }, timeoutMs);
+
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      child.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      child.on('close', (code) => {
+        finish(resolve, { code, output, errorOutput });
+      });
+
+      child.on('error', (error) => {
+        finish(reject, error);
       });
     });
+  }
+
+  /**
+   * Parse the JSON response from the Python MediaPipe script
+   */
+  parsePythonResult(output, errorOutput) {
+    try {
+      return JSON.parse(output);
+    } catch (error) {
+      throw new Error(`Failed to parse MediaPipe output: ${errorOutput || output || error.message}`);
+    }
   }
 
   /**
    * Detect pose from image file using Python MediaPipe
    */
   async detectPoseFromImage(imagePath) {
-    if (!this.initializationAttempted) {
-      await this.initialize();
-    }
+    await this.initialize();
 
     if (!this.initialized) {
       return this.fallbackDetection(imagePath);
@@ -183,42 +261,16 @@ class PoseDetectionService {
    * Call Python MediaPipe script
    */
   async callPythonMediaPipe(imagePath) {
-    return new Promise((resolve, reject) => {
-      const process = spawn(this.pythonPath, [this.scriptPath, imagePath]);
-      
-      let output = '';
-      let errorOutput = '';
+    const { code, output, errorOutput } = await this.runPythonMediaPipe(
+      [imagePath],
+      this.detectionTimeoutMs
+    );
 
-      process.stdout.on('data', (data) => {
-        output += data.toString();
-      });
+    if (code !== 0) {
+      throw new Error(`MediaPipe process failed: ${errorOutput || output || `exit code ${code}`}`);
+    }
 
-      process.stderr.on('data', (data) => {
-        errorOutput += data.toString();
-      });
-
-      process.on('close', (code) => {
-        if (code === 0) {
-          try {
-            const result = JSON.parse(output);
-            resolve(result);
-          } catch (error) {
-            reject(new Error('Failed to parse MediaPipe output'));
-          }
-        } else {
-          reject(new Error(`MediaPipe process failed: ${errorOutput}`));
-        }
-      });
-
-      process.on('error', (error) => {
-        reject(error);
-      });
-
-      setTimeout(() => {
-        process.kill();
-        reject(new Error('MediaPipe process timeout'));
-      }, 10000);
-    });
+    return this.parsePythonResult(output, errorOutput);
   }
 
   /**
@@ -820,6 +872,7 @@ class PoseDetectionService {
   async cleanup() {
     this.initialized = false;
     this.initializationAttempted = false;
+    this.initializationPromise = null;
     this.usingFallback = false;
     this.hasLoggedFallback = false;
     this.angleHistory = {};

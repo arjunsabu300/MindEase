@@ -40,7 +40,7 @@ class PoseDetector:
             
             if model_path:
                 print(f"✅ Model file exists at: {model_path}", file=sys.stderr)
-                base_options = python.BaseOptions(model_asset_path=str(model_path))
+                base_options = self._create_base_options(python, model_path)
                 options = vision.PoseLandmarkerOptions(
                     base_options=base_options,
                     running_mode=vision.RunningMode.IMAGE
@@ -97,7 +97,27 @@ class PoseDetector:
 
         print("❌ No model file found in any location!", file=sys.stderr)
         return None
-        
+
+    def _create_base_options(self, python_tasks, model_path):
+        """Create MediaPipe base options and prefer CPU inference on headless hosts."""
+        base_options_kwargs = {
+            'model_asset_path': str(model_path),
+        }
+
+        delegate_type = getattr(python_tasks.BaseOptions, 'Delegate', None)
+        cpu_delegate = getattr(delegate_type, 'CPU', None) if delegate_type else None
+
+        if cpu_delegate is not None:
+            try:
+                return python_tasks.BaseOptions(
+                    **base_options_kwargs,
+                    delegate=cpu_delegate,
+                )
+            except (TypeError, ValueError):
+                pass
+
+        return python_tasks.BaseOptions(**base_options_kwargs)
+
     def detect_from_file(self, image_path):
         """
         Detect pose from image file
