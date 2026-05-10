@@ -1,24 +1,21 @@
 #!/bin/bash
 
-# Render build script - Install system dependencies for MediaPipe
+# Render build script for MediaPipe
 # Root directory is 'backend' on Render
-echo "📦 Installing system dependencies for MediaPipe..."
+echo "📦 Building MindEase backend with MediaPipe support..."
 
-# Install OpenGL libraries required by MediaPipe
-apt-get update
-apt-get install -y \
-    libgles2-mesa \
-    libgles2-mesa-dev \
-    libegl1-mesa \
-    libegl1-mesa-dev \
-    libgl1-mesa-glx \
-    libgl1-mesa-dev
+# Install Node.js dependencies
+echo "📥 Installing Node.js packages..."
+npm install
 
-echo "✅ System dependencies installed"
-
-# Now run the normal build (we're already in backend directory)
-npm install && cd python && chmod +x setup.sh && bash setup.sh && cd ..
+# Set up Python environment and MediaPipe
+echo "🐍 Setting up Python environment..."
+cd python
+chmod +x setup.sh
+bash setup.sh
+cd ..
 
 echo "✅ Build complete!"
+echo "Note: Using opencv-python-headless for headless server compatibility"
 
 # Made with Bob

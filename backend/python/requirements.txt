@@ -1,7 +1,8 @@
 # MediaPipe Pose Detection Requirements
 # All packages are FREE and open-source
 
+# Use opencv-python-headless for servers without display
+opencv-python-headless>=4.9.0
 mediapipe>=0.10.30
-opencv-python>=4.9.0
 numpy>=1.24.0
 Pillow>=10.0.0
