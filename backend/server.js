@@ -213,6 +213,21 @@ app.get('/api/profile', async (req, res) => {
   }
 });
 
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
+
+app.use((err, req, res, next) => {
+  console.error('Unhandled server error:', err.message);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal server error',
+  });
+});
+
 // ==================== START SERVER ====================
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {

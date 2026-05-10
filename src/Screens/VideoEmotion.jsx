@@ -6,6 +6,29 @@ import { Upload, Camera } from 'lucide-react-native';
 
 const API_URL_VIDEO = "https://mindease-iig7.onrender.com/api/emotion/video";
 
+const parseJsonResponse = async (response, fallbackMessage) => {
+  const raw = await response.text();
+  console.log("RAW RESPONSE:", raw);
+
+  if (!raw) {
+    throw new Error(`${fallbackMessage} (empty response, status ${response.status})`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    const preview = raw.trim().slice(0, 200);
+    throw new Error(`${fallbackMessage} (status ${response.status}): ${preview}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || `${fallbackMessage} (status ${response.status})`);
+  }
+
+  return data;
+};
+
 export default function VideoEmotion({ navigation }) {
 
   const [loading, setLoading] = React.useState(false);
@@ -62,18 +85,8 @@ export default function VideoEmotion({ navigation }) {
       },
     });
 
-    const raw = await response.text();
-    console.log("RAW RESPONSE:", raw);
+    const data = await parseJsonResponse(response, "Video analysis failed");
 
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (err) {
-      Alert.alert("Backend Error", raw.substring(0, 200));
-      return;
-    }
-
-    setLoading(false);
     // Handle the new response structure from multimodal
     // CHECK CONFLICT
     if (data.status === "conflict") {
@@ -107,8 +120,9 @@ export default function VideoEmotion({ navigation }) {
     }
 
   } catch (err) {
-    setLoading(false);
     Alert.alert("Error", err.message);
+  } finally {
+    setLoading(false);
   }
 };
 

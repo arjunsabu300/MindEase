@@ -21,6 +21,28 @@ import * as ImageManipulator from 'expo-image-manipulator';
 const { width, height } = Dimensions.get("window");
 const API_URL = "https://mindease-iig7.onrender.com";
 
+const parseJsonResponse = async (response, fallbackMessage) => {
+  const raw = await response.text();
+
+  if (!raw) {
+    throw new Error(`${fallbackMessage} (empty response, status ${response.status})`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (error) {
+    const preview = raw.trim().slice(0, 160);
+    throw new Error(`${fallbackMessage} (status ${response.status}): ${preview}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || data.error || `${fallbackMessage} (status ${response.status})`);
+  }
+
+  return data;
+};
+
 export default function YogaSessionScreen({ route, navigation }) {
   const { yogaPlan = [], sessionId } = route?.params || {};
   const [currentPoseIndex, setCurrentPoseIndex] = useState(0);
@@ -57,6 +79,7 @@ export default function YogaSessionScreen({ route, navigation }) {
   const processingInterval = useRef(null);
   const holdCheckInterval = useRef(null);
   const lastProcessTime = useRef(0);
+  const isProcessingRef = useRef(false);
   const completionInProgress = useRef(false);
   const latestPoseScore = useRef(0);
   const latestFeedback = useRef({ overall: "Watch the video to learn the pose", details: [] });
@@ -117,10 +140,7 @@ export default function YogaSessionScreen({ route, navigation }) {
     setLoadingVideo(true);
     try {
       const res = await fetch(`${API_URL}/api/yoga/youtube?pose=${currentPose.id}`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch video');
-      }
-      const data = await res.json();
+      const data = await parseJsonResponse(res, 'Failed to fetch video');
       if (data.videoId) {
         setVideoId(data.videoId);
       } else {
@@ -221,13 +241,14 @@ export default function YogaSessionScreen({ route, navigation }) {
   };
 
   const captureAndAnalyzePose = async () => {
-    if (!cameraRef.current || isProcessing || poseCompleted) return;
+    if (!cameraRef.current || isProcessingRef.current || poseCompleted) return;
 
     // Throttle processing to avoid overwhelming
     const now = Date.now();
     if (now - lastProcessTime.current < 1000) return;
     lastProcessTime.current = now;
 
+    isProcessingRef.current = true;
     setIsProcessing(true);
 
     try {
@@ -255,6 +276,7 @@ export default function YogaSessionScreen({ route, navigation }) {
     } catch (error) {
       console.error("Pose capture error:", error);
     } finally {
+      isProcessingRef.current = false;
       setIsProcessing(false);
     }
   };
@@ -277,7 +299,7 @@ export default function YogaSessionScreen({ route, navigation }) {
         },
       });
 
-      const data = await response.json();
+      const data = await parseJsonResponse(response, 'Backend pose analysis failed');
 
       if (data.success && data.detected && data.validation) {
         const newScore = data.validation.score;
