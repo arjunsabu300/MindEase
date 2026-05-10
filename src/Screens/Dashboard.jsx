@@ -278,14 +278,14 @@ const startFaceAnalysis = async () => {
         <View style={styles.headerRow}>
           <View style={styles.userRow}>
             <Avatar.Text
-              size={64}
+              size={56}
               label={userData.name
                 .split(" ")
                 .map((n) => n[0])
                 .join("")}
               style={styles.avatar}
             />
-            <View>
+            <View style={styles.userInfo}>
               <Title style={styles.userName}>
                 Hi, {userData.name.split(" ")[0]} 👋
               </Title>
@@ -293,8 +293,9 @@ const startFaceAnalysis = async () => {
                 icon={emotionIcons[currentMood]}
                 style={styles.moodChip}
                 textStyle={{ color: "white" }}
+                compact
               >
-                Feeling {currentMood}
+                {currentMood}
               </Chip>
             </View>
           </View>
@@ -303,20 +304,23 @@ const startFaceAnalysis = async () => {
             <IconButton
               icon="account"
               iconColor="white"
-              size={24}
+              size={22}
               onPress={() => navigation.navigate('Profile')}
+              style={styles.iconButton}
             />
             <IconButton
               icon="history"
               iconColor="white"
-              size={24}
+              size={22}
               onPress={() => navigation.navigate('History')}
+              style={styles.iconButton}
             />
             <IconButton
               icon="logout"
               iconColor="white"
-              size={24}
+              size={22}
               onPress={handleLogout}
+              style={styles.iconButton}
             />
           </View>
         </View>
@@ -405,8 +409,8 @@ const styles = StyleSheet.create({
 
   header: {
     paddingTop: 50,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
   },
 
   headerRow: {
@@ -418,17 +422,40 @@ const styles = StyleSheet.create({
   headerIcons: {
     flexDirection: "row",
     alignItems: "center",
+    marginLeft: 8,
   },
 
-  userRow: { flexDirection: "row", alignItems: "center" },
+  iconButton: {
+    margin: 0,
+    marginHorizontal: 2,
+  },
 
-  avatar: { backgroundColor: "white", marginRight: 12 },
+  userRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8,
+  },
 
-  userName: { color: "white", fontWeight: "700" },
+  userInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+  avatar: {
+    backgroundColor: "white",
+  },
+
+  userName: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 18,
+  },
 
   moodChip: {
-    marginTop: 6,
+    marginTop: 4,
     backgroundColor: "rgba(255,255,255,0.2)",
+    alignSelf: "flex-start",
   },
 
   content: { padding: 16 },

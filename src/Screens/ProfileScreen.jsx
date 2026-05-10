@@ -177,21 +177,23 @@ const ProfileScreen = ({ navigation }) => {
           <IconButton
             icon="arrow-left"
             iconColor="white"
-            size={28}
+            size={24}
             onPress={() => navigation.goBack()}
+            style={styles.headerButton}
           />
           <Title style={styles.headerTitle}>My Profile</Title>
           <IconButton
             icon={editing ? 'close' : 'pencil'}
             iconColor="white"
-            size={24}
+            size={22}
             onPress={() => editing ? handleCancel() : setEditing(true)}
+            style={styles.headerButton}
           />
         </View>
 
         <View style={styles.avatarSection}>
           <Avatar.Text
-            size={100}
+            size={70}
             label={profile.name
               .split(' ')
               .map((n) => n[0])
@@ -380,22 +382,26 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 50,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerButton: {
+    margin: 0,
   },
   headerTitle: {
     color: 'white',
     fontWeight: '700',
-    fontSize: 22,
+    fontSize: 20,
   },
   avatarSection: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 8,
   },
   avatar: {
     backgroundColor: 'white',
@@ -403,13 +409,13 @@ const styles = StyleSheet.create({
   userName: {
     color: 'white',
     fontWeight: '700',
-    marginTop: 12,
-    fontSize: 24,
+    marginTop: 8,
+    fontSize: 20,
   },
   userEmail: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 13,
+    marginTop: 2,
   },
   content: {
     padding: 16,
