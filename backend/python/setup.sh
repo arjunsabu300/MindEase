@@ -58,6 +58,23 @@ pip install -r requirements.txt
 echo ""
 echo "✅ Installation complete!"
 echo ""
+
+# Download MediaPipe model file if not exists
+MODEL_FILE="pose_landmarker_lite.task"
+if [ ! -f "$MODEL_FILE" ]; then
+    echo "📥 Downloading MediaPipe pose model..."
+    curl -L -o "$MODEL_FILE" "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+    
+    if [ -f "$MODEL_FILE" ]; then
+        echo "✅ Model file downloaded successfully!"
+    else
+        echo "⚠️  Failed to download model file. Pose detection will use fallback mode."
+    fi
+else
+    echo "✅ Model file already exists"
+fi
+
+echo ""
 echo "📝 Installed packages:"
 pip list | grep -E "mediapipe|opencv|numpy|Pillow"
 echo ""
