@@ -4,6 +4,6 @@
 # Use opencv-python-headless for servers without display
 opencv-python-headless>=4.9.0
 # Use MediaPipe 0.10.9 - last version with solutions API that works on headless servers
-mediapipe==0.10.9
+mediapipe==0.10.35
 numpy>=1.24.0
 Pillow>=10.0.0
