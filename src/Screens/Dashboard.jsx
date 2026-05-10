@@ -64,7 +64,7 @@ const DashboardScreen = ({ navigation }) => {
 
 // const API_URL_STT = "http://192.168.3.55:5001/api/emotion/voicetext";
 
-const API_URL_MULTI = "https://mindease-euf7.onrender.com/api/emotion/multimodal";
+const API_URL_MULTI = "https://mindease-tqx5.onrender.com/api/emotion/multimodal";
 
 const startVoiceAnalysis = async () => {
   try {
@@ -131,7 +131,7 @@ const startVoiceAnalysis = async () => {
 
   /* ===================== FER ===================== */
 
-const API_URL_FACE = "https://mindease-euf7.onrender.com/api/emotion/face";
+const API_URL_FACE = "https://mindease-tqx5.onrender.com/api/emotion/face";
 
 
 /* ===================== FACE ANALYSIS (FER) ===================== */

@@ -3,7 +3,7 @@ import { View, Alert } from "react-native";
 import { Text, Button, Title } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_URL_FEEDBACK = "https://mindease-euf7.onrender.com/api/feedback";
+const API_URL_FEEDBACK = "https://mindease-tqx5.onrender.com/api/feedback";
 
 export default function FeedbackScreen({ route, navigation }) {
   const { sessionId, userId: routeUserId, completed = true, completionRatio = 1 } = route.params || {};
