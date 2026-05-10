@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Render build script - Install system dependencies for MediaPipe
+# Root directory is 'backend' on Render
 echo "📦 Installing system dependencies for MediaPipe..."
 
 # Install OpenGL libraries required by MediaPipe
@@ -15,8 +16,8 @@ apt-get install -y \
 
 echo "✅ System dependencies installed"
 
-# Now run the normal build
-cd backend && npm install && cd python && chmod +x setup.sh && bash setup.sh && cd ../..
+# Now run the normal build (we're already in backend directory)
+npm install && cd python && chmod +x setup.sh && bash setup.sh && cd ..
 
 echo "✅ Build complete!"
 

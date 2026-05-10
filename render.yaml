@@ -4,8 +4,9 @@ services:
     env: node
     region: singapore
     plan: free
+    rootDirectory: backend
     buildCommand: chmod +x render-build.sh && ./render-build.sh
-    startCommand: cd backend && node server.js
+    startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -16,7 +17,7 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: PYTHON_PATH
-        value: /opt/render/project/src/backend/python/venv/bin/python3
+        value: /opt/render/project/src/python/venv/bin/python3
     autoDeploy: true
 
 # Made with Bob
