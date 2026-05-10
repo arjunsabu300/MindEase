@@ -304,12 +304,17 @@ export default function YogaSessionScreen({ route, navigation }) {
 
       const data = await parseJsonResponse(response, 'Backend pose analysis failed');
 
+      console.log('📊 Backend Response:', JSON.stringify(data, null, 2));
+
       if (data.success && data.detected && data.validation) {
         const newScore = data.validation.score;
+        console.log('🎯 New Score:', newScore, 'Type:', typeof newScore);
+        
         const smoothedScore = scoreHistoryRef.current.length > 0
           ? smoothScore(latestPoseScore.current, newScore, 0.45)
           : newScore;
 
+        console.log('✨ Smoothed Score:', smoothedScore);
         setPoseScore(smoothedScore);
         latestPoseScore.current = smoothedScore;
         const updatedScoreHistory = [...scoreHistoryRef.current, smoothedScore].slice(-5);
