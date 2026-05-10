@@ -21,19 +21,28 @@ class PoseDetectionService {
     this.angleHistory = {};
     this.historySize = 3; // Keep last 3 frames for smoothing
     
-    // Try to use virtual environment Python (cross-platform)
-    const venvPythonMac = path.join(__dirname, '../python/venv/bin/python3');
-    const venvPythonWin = path.join(__dirname, '../python/venv/Scripts/python.exe');
+    // Try to use Python in this order:
+    // 1. Environment variable (for Render deployment)
+    // 2. Virtual environment (local development)
+    // 3. System Python (fallback)
     
-    if (fs.existsSync(venvPythonMac)) {
-      this.pythonPath = venvPythonMac;
-      console.log('🐍 Using virtual environment Python (macOS/Linux)');
-    } else if (fs.existsSync(venvPythonWin)) {
-      this.pythonPath = venvPythonWin;
-      console.log('🐍 Using virtual environment Python (Windows)');
+    if (process.env.PYTHON_PATH && fs.existsSync(process.env.PYTHON_PATH)) {
+      this.pythonPath = process.env.PYTHON_PATH;
+      console.log('🐍 Using Python from PYTHON_PATH env:', this.pythonPath);
     } else {
-      this.pythonPath = process.platform === 'win32' ? 'python' : 'python3';
-      console.log('🐍 Using system Python (fallback)');
+      const venvPythonMac = path.join(__dirname, '../python/venv/bin/python3');
+      const venvPythonWin = path.join(__dirname, '../python/venv/Scripts/python.exe');
+      
+      if (fs.existsSync(venvPythonMac)) {
+        this.pythonPath = venvPythonMac;
+        console.log('🐍 Using virtual environment Python (macOS/Linux)');
+      } else if (fs.existsSync(venvPythonWin)) {
+        this.pythonPath = venvPythonWin;
+        console.log('🐍 Using virtual environment Python (Windows)');
+      } else {
+        this.pythonPath = process.platform === 'win32' ? 'python' : 'python3';
+        console.log('🐍 Using system Python (fallback)');
+      }
     }
   }
 

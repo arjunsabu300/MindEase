@@ -36,7 +36,10 @@ class PoseDetector:
             from mediapipe.tasks.python import vision
             
             model_path = self._resolve_model_path()
+            print(f"🔍 Model path resolved: {model_path}", file=sys.stderr)
+            
             if model_path:
+                print(f"✅ Model file exists at: {model_path}", file=sys.stderr)
                 base_options = python.BaseOptions(model_asset_path=str(model_path))
                 options = vision.PoseLandmarkerOptions(
                     base_options=base_options,
@@ -44,8 +47,12 @@ class PoseDetector:
                 )
                 self.detector = vision.PoseLandmarker.create_from_options(options)
                 self.use_new_api = True
+                print("✅ New MediaPipe API initialized successfully!", file=sys.stderr)
+            else:
+                print("❌ Model file not found in any expected location", file=sys.stderr)
 
-        except (ImportError, AttributeError, Exception):
+        except (ImportError, AttributeError, Exception) as e:
+            print(f"❌ New API failed: {type(e).__name__}: {str(e)}", file=sys.stderr)
             self.detector = None
 
         if not self.use_new_api:
@@ -67,6 +74,8 @@ class PoseDetector:
     def _resolve_model_path(self):
         """Resolve the pose task model from a few safe local locations."""
         script_dir = Path(__file__).resolve().parent
+        print(f"🔍 Script directory: {script_dir}", file=sys.stderr)
+        
         candidates = [
             script_dir / 'pose_landmarker.task',
             script_dir / 'pose_landmarker_lite.task',
@@ -78,10 +87,15 @@ class PoseDetector:
             script_dir.parent / 'pose_landmarker_lite.task',
         ]
 
-        for candidate in candidates:
-            if candidate.exists():
+        print(f"🔍 Checking {len(candidates)} candidate paths:", file=sys.stderr)
+        for i, candidate in enumerate(candidates, 1):
+            exists = candidate.exists()
+            status = "✅ FOUND" if exists else "❌ Not found"
+            print(f"   {i}. {status}: {candidate}", file=sys.stderr)
+            if exists:
                 return candidate
 
+        print("❌ No model file found in any location!", file=sys.stderr)
         return None
         
     def detect_from_file(self, image_path):
