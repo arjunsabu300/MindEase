@@ -47,7 +47,7 @@ venv/
 .venv/
 backend/python/venv/
 backend/python/__pycache__/
-backend/python/models/*.task
+
 
 # generated native folders
 /ios
