@@ -675,20 +675,30 @@ class PoseDetectionService {
   }
 
   canCalculateAngle(...points) {
-    return points.every(point => this.getLandmarkVisibility(point) >= 0.35);
+    // Lowered threshold from 0.35 to 0.2 for better detection
+    // MediaPipe visibility can be low even for valid poses
+    return points.every(point => point && this.getLandmarkVisibility(point) >= 0.2);
   }
 
   calculateVisibleAngle(key, pointA, pointB, pointC, angles) {
     if (!this.canCalculateAngle(pointA, pointB, pointC)) {
+      console.log(`⚠️ Skipping ${key}: visibility too low`);
       return;
     }
 
-    angles[key] = this.calculateAngle(pointA, pointB, pointC);
+    const angle = this.calculateAngle(pointA, pointB, pointC);
+    if (isNaN(angle) || !isFinite(angle)) {
+      console.log(`⚠️ Invalid angle for ${key}: ${angle}`);
+      return;
+    }
+
+    angles[key] = angle;
     this.lastAngleConfidences[key] = Math.min(
       this.getLandmarkVisibility(pointA),
       this.getLandmarkVisibility(pointB),
       this.getLandmarkVisibility(pointC)
     );
+    console.log(`✓ ${key}: ${Math.round(angle)}° (confidence: ${Math.round(this.lastAngleConfidences[key] * 100)}%)`);
   }
 
   normalizePoseAngles(angles, poseName) {
@@ -729,7 +739,21 @@ class PoseDetectionService {
     const angles = {};
     this.lastAngleConfidences = {};
 
+    if (!landmarks || landmarks.length < 33) {
+      console.error('❌ Invalid landmarks array:', landmarks?.length || 0);
+      return angles;
+    }
+
     try {
+      // Log landmark visibility for debugging
+      const sampleVisibility = {
+        shoulder: this.getLandmarkVisibility(landmarks[11]),
+        hip: this.getLandmarkVisibility(landmarks[23]),
+        knee: this.getLandmarkVisibility(landmarks[25]),
+        ankle: this.getLandmarkVisibility(landmarks[27])
+      };
+      console.log('👁️ Landmark visibility sample:', sampleVisibility);
+
       this.calculateVisibleAngle('leftKnee', landmarks[23], landmarks[25], landmarks[27], angles);
       this.calculateVisibleAngle('rightKnee', landmarks[24], landmarks[26], landmarks[28], angles);
       this.calculateVisibleAngle('leftElbow', landmarks[11], landmarks[13], landmarks[15], angles);
@@ -739,34 +763,34 @@ class PoseDetectionService {
       this.calculateVisibleAngle('leftShoulder', landmarks[23], landmarks[11], landmarks[13], angles);
       this.calculateVisibleAngle('rightShoulder', landmarks[24], landmarks[12], landmarks[14], angles);
 
-      // Spine angle
-      if (!this.canCalculateAngle(landmarks[11], landmarks[12], landmarks[23], landmarks[24])) {
-        return angles;
+      // Spine angle - calculate even if visibility is low
+      if (landmarks[11] && landmarks[12] && landmarks[23] && landmarks[24]) {
+        const midShoulder = {
+          x: (landmarks[11].x + landmarks[12].x) / 2,
+          y: (landmarks[11].y + landmarks[12].y) / 2
+        };
+        const midHip = {
+          x: (landmarks[23].x + landmarks[24].x) / 2,
+          y: (landmarks[23].y + landmarks[24].y) / 2
+        };
+        
+        const spineAngle = Math.atan2(
+          midShoulder.x - midHip.x,
+          midHip.y - midShoulder.y
+        ) * (180 / Math.PI);
+        angles.spine = 180 - Math.abs(spineAngle);
+        this.lastAngleConfidences.spine = Math.min(
+          this.getLandmarkVisibility(landmarks[11]),
+          this.getLandmarkVisibility(landmarks[12]),
+          this.getLandmarkVisibility(landmarks[23]),
+          this.getLandmarkVisibility(landmarks[24])
+        );
       }
 
-      const midShoulder = {
-        x: (landmarks[11].x + landmarks[12].x) / 2,
-        y: (landmarks[11].y + landmarks[12].y) / 2
-      };
-      const midHip = {
-        x: (landmarks[23].x + landmarks[24].x) / 2,
-        y: (landmarks[23].y + landmarks[24].y) / 2
-      };
-      
-      const spineAngle = Math.atan2(
-        midShoulder.x - midHip.x,
-        midHip.y - midShoulder.y
-      ) * (180 / Math.PI);
-      angles.spine = 180 - Math.abs(spineAngle);
-      this.lastAngleConfidences.spine = Math.min(
-        this.getLandmarkVisibility(landmarks[11]),
-        this.getLandmarkVisibility(landmarks[12]),
-        this.getLandmarkVisibility(landmarks[23]),
-        this.getLandmarkVisibility(landmarks[24])
-      );
+      console.log('📐 Extracted angles:', Object.keys(angles).length, 'angles:', angles);
 
     } catch (error) {
-      console.error('Error extracting angles:', error);
+      console.error('❌ Error extracting angles:', error);
     }
 
     return angles;
