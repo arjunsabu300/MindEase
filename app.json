@@ -30,7 +30,9 @@
         "CAMERA",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.mindease.app",
       "versionCode": 1
@@ -44,7 +46,13 @@
         {
           "cameraPermission": "Allow MindEase to access your camera for emotion detection and yoga posture checking."
         }
-      ]
-    ]
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e9f15338-fdba-4288-89eb-4163f0139479"
+      }
+    }
   }
 }
