@@ -79,13 +79,15 @@ export default function FeedbackScreen({ route, navigation }) {
 
       <View style={{ flexDirection: "row", marginVertical: 20 }}>
         {[1, 2, 3, 4, 5].map((n) => (
+          
           <Button
             key={n}
-            mode={rating === n ? "contained" : "outlined"}
+            mode={rating >= n ? "contained" : "outlined"}
             onPress={() => setRating(n)}
+            style={{ marginRight: 5 }}
           >
             ⭐
-          </Button>
+</Button>
         ))}
       </View>
 
