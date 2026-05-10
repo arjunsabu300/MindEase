@@ -127,12 +127,13 @@ class PoseDetectionService {
         .then(({ code, output, errorOutput }) => {
           console.log('   Exit code:', code);
           console.log('   Output:', output);
-          if (errorOutput) console.log('   Error output:', errorOutput);
+          const filteredErrorOutput = this.filterMediaPipeLogOutput(errorOutput);
+          if (filteredErrorOutput) console.log('   Error output:', filteredErrorOutput);
 
           if (code !== 0) {
             resolve({
               success: false,
-              error: errorOutput || output || `Healthcheck failed with exit code ${code}`,
+              error: filteredErrorOutput || output || `Healthcheck failed with exit code ${code}`,
             });
             return;
           }
@@ -154,7 +155,7 @@ class PoseDetectionService {
             console.log('❌ Failed to parse output:', error.message);
             resolve({
               success: false,
-              error: errorOutput || output || `Healthcheck failed with exit code ${code}`,
+              error: filteredErrorOutput || output || `Healthcheck failed with exit code ${code}`,
             });
           }
         })
@@ -218,7 +219,30 @@ class PoseDetectionService {
       ...process.env,
       TF_CPP_MIN_LOG_LEVEL: process.env.TF_CPP_MIN_LOG_LEVEL || '2',
       GLOG_minloglevel: process.env.GLOG_minloglevel || '2',
+      MEDIAPIPE_DISABLE_GPU: process.env.MEDIAPIPE_DISABLE_GPU || '1',
     };
+  }
+
+  filterMediaPipeLogOutput(output) {
+    if (!output) {
+      return '';
+    }
+
+    return output
+      .split(/\r?\n/)
+      .filter(line => {
+        const normalized = line.toLowerCase();
+        return !(
+          normalized.includes('gpu suport is not available') ||
+          normalized.includes('gpu support is not available') ||
+          normalized.includes('egl_initialized') ||
+          normalized.includes('unable to initialize egl') ||
+          normalized.includes('gl_context_egl') ||
+          normalized.includes('all log messages before absl::initializelog')
+        );
+      })
+      .join('\n')
+      .trim();
   }
 
   startPythonServer() {
@@ -248,7 +272,7 @@ class PoseDetectionService {
     });
 
     this.pythonServer.stderr.on('data', (data) => {
-      const message = data.toString().trim();
+      const message = this.filterMediaPipeLogOutput(data.toString());
       if (message) {
         console.log('MediaPipe server:', message);
       }
@@ -786,7 +810,12 @@ class PoseDetectionService {
     });
     
     // Log for debugging
-    console.log(`🔍 Pose Check: ${totalCriticalJoints} critical joints, ${criticalMismatches} mismatches (${Math.round(criticalMismatches/totalCriticalJoints*100)}%)`);
+    const mismatchPercent = totalCriticalJoints > 0
+      ? Math.round((criticalMismatches / totalCriticalJoints) * 100)
+      : 0;
+    if (totalCriticalJoints > 0 || criticalMismatches > 0) {
+      console.log(`Pose Check: ${totalCriticalJoints} critical joints, ${criticalMismatches} mismatches (${mismatchPercent}%)`);
+    }
     if (mismatchDetails.length > 0) {
       console.log('Mismatches:', mismatchDetails);
     }
