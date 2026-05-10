@@ -78,6 +78,10 @@ class PoseDetectionService {
    */
   async testPythonMediaPipe() {
     return new Promise((resolve) => {
+      console.log('🔍 Testing Python MediaPipe...');
+      console.log('   Python path:', this.pythonPath);
+      console.log('   Script path:', this.scriptPath);
+      
       const process = spawn(this.pythonPath, [this.scriptPath, '--healthcheck']);
       
       let output = '';
@@ -91,18 +95,25 @@ class PoseDetectionService {
       });
 
       process.on('close', (code) => {
+        console.log('   Exit code:', code);
+        console.log('   Output:', output);
+        if (errorOutput) console.log('   Error output:', errorOutput);
+        
         try {
           const result = JSON.parse(output);
           if (result.success && result.ready) {
+            console.log('✅ MediaPipe test passed!');
             resolve({ success: true });
             return;
           }
 
+          console.log('❌ MediaPipe test failed:', result.error);
           resolve({
             success: false,
             error: result.error || 'MediaPipe detector is not ready',
           });
         } catch (error) {
+          console.log('❌ Failed to parse output:', error.message);
           resolve({
             success: false,
             error: errorOutput || output || `Healthcheck failed with exit code ${code}`,
@@ -111,6 +122,7 @@ class PoseDetectionService {
       });
 
       process.on('error', (error) => {
+        console.log('❌ Process error:', error.message);
         resolve({ success: false, error: error.message });
       });
     });
