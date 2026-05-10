@@ -60,18 +60,21 @@ echo "✅ Installation complete!"
 echo ""
 
 # Download MediaPipe model file if not exists
-MODEL_FILE="pose_landmarker_lite.task"
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+MODEL_FILE="$SCRIPT_DIR/pose_landmarker_lite.task"
+
 if [ ! -f "$MODEL_FILE" ]; then
-    echo "📥 Downloading MediaPipe pose model..."
+    echo "📥 Downloading MediaPipe pose model to $MODEL_FILE..."
     curl -L -o "$MODEL_FILE" "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
     
     if [ -f "$MODEL_FILE" ]; then
-        echo "✅ Model file downloaded successfully!"
+        echo "✅ Model file downloaded successfully to $MODEL_FILE"
     else
         echo "⚠️  Failed to download model file. Pose detection will use fallback mode."
     fi
 else
-    echo "✅ Model file already exists"
+    echo "✅ Model file already exists at $MODEL_FILE"
 fi
 
 echo ""
