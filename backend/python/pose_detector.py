@@ -285,6 +285,50 @@ def main():
     Command line interface
     Usage: python pose_detector.py <image_path>
     """
+    if len(sys.argv) >= 2 and sys.argv[1] == '--server':
+        detector = None
+        try:
+            detector = PoseDetector()
+            for line in sys.stdin:
+                line = line.strip()
+                if not line:
+                    continue
+
+                request = {}
+                try:
+                    request = json.loads(line)
+                    request_id = request.get('id')
+                    image_path = request.get('imagePath')
+
+                    if not image_path:
+                        response = {
+                            'id': request_id,
+                            'success': False,
+                            'error': 'No image path provided'
+                        }
+                    else:
+                        response = detector.detect_from_file(image_path)
+                        response['id'] = request_id
+                except Exception as error:
+                    response = {
+                        'id': request.get('id') if 'request' in locals() else None,
+                        'success': False,
+                        'error': str(error)
+                    }
+
+                print(json.dumps(response), flush=True)
+        except Exception as error:
+            print(json.dumps({
+                'success': False,
+                'ready': False,
+                'error': str(error)
+            }), flush=True)
+            sys.exit(1)
+        finally:
+            if detector:
+                detector.cleanup()
+        return
+
     if len(sys.argv) >= 2 and sys.argv[1] == '--healthcheck':
         try:
             detector = PoseDetector()

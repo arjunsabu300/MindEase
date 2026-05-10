@@ -19,9 +19,17 @@ class PoseDetectionService {
     this.scriptPath = path.join(__dirname, '../python/pose_detector.py');
     this.healthcheckTimeoutMs = this.getPositiveIntegerEnv('MEDIAPIPE_HEALTHCHECK_TIMEOUT_MS', 60000);
     this.detectionTimeoutMs = this.getPositiveIntegerEnv('MEDIAPIPE_DETECTION_TIMEOUT_MS', 45000);
+    this.usePersistentPython = process.env.MEDIAPIPE_PROCESS_PER_REQUEST !== 'true';
+    this.pythonServer = null;
+    this.pythonServerBuffer = '';
+    this.pythonServerRequests = new Map();
+    this.pythonServerRequestId = 0;
     
     // Temporal smoothing buffer for reducing jitter
     this.angleHistory = {};
+    this.angleConfidenceHistory = {};
+    this.lastAngleConfidences = {};
+    this.lastPoseName = null;
     this.historySize = 3; // Keep last 3 frames for smoothing
     
     // Try to use Python in this order:
@@ -89,6 +97,9 @@ class PoseDetectionService {
       if (testResult.success) {
         this.initialized = true;
         this.usingFallback = false;
+        if (this.usePersistentPython) {
+          this.startPythonServer();
+        }
         console.log('✅ MediaPipe pose detection initialized (Python)');
       } else {
         console.warn('⚠️  MediaPipe not available:', testResult.error);
@@ -160,11 +171,7 @@ class PoseDetectionService {
   async runPythonMediaPipe(args, timeoutMs) {
     return new Promise((resolve, reject) => {
       const child = spawn(this.pythonPath, [this.scriptPath, ...args], {
-        env: {
-          ...process.env,
-          TF_CPP_MIN_LOG_LEVEL: process.env.TF_CPP_MIN_LOG_LEVEL || '2',
-          GLOG_minloglevel: process.env.GLOG_minloglevel || '2',
-        },
+        env: this.getPythonEnv(),
       });
 
       let settled = false;
@@ -206,6 +213,116 @@ class PoseDetectionService {
     });
   }
 
+  getPythonEnv() {
+    return {
+      ...process.env,
+      TF_CPP_MIN_LOG_LEVEL: process.env.TF_CPP_MIN_LOG_LEVEL || '2',
+      GLOG_minloglevel: process.env.GLOG_minloglevel || '2',
+    };
+  }
+
+  startPythonServer() {
+    if (this.pythonServer && !this.pythonServer.killed) {
+      return;
+    }
+
+    this.pythonServerBuffer = '';
+    this.pythonServer = spawn(this.pythonPath, [this.scriptPath, '--server'], {
+      env: this.getPythonEnv(),
+    });
+
+    this.pythonServer.stdout.on('data', (data) => {
+      this.pythonServerBuffer += data.toString();
+
+      let newlineIndex = this.pythonServerBuffer.indexOf('\n');
+      while (newlineIndex !== -1) {
+        const line = this.pythonServerBuffer.slice(0, newlineIndex).trim();
+        this.pythonServerBuffer = this.pythonServerBuffer.slice(newlineIndex + 1);
+
+        if (line) {
+          this.handlePythonServerLine(line);
+        }
+
+        newlineIndex = this.pythonServerBuffer.indexOf('\n');
+      }
+    });
+
+    this.pythonServer.stderr.on('data', (data) => {
+      const message = data.toString().trim();
+      if (message) {
+        console.log('MediaPipe server:', message);
+      }
+    });
+
+    this.pythonServer.on('error', (error) => {
+      this.rejectAllPythonServerRequests(error);
+      this.pythonServer = null;
+    });
+
+    this.pythonServer.on('close', (code) => {
+      this.rejectAllPythonServerRequests(new Error(`MediaPipe server exited with code ${code}`));
+      this.pythonServer = null;
+    });
+  }
+
+  handlePythonServerLine(line) {
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch (error) {
+      console.warn('Failed to parse MediaPipe server output:', line);
+      return;
+    }
+
+    const pending = this.pythonServerRequests.get(message.id);
+    if (!pending) {
+      return;
+    }
+
+    clearTimeout(pending.timeout);
+    this.pythonServerRequests.delete(message.id);
+    pending.resolve(message);
+  }
+
+  rejectAllPythonServerRequests(error) {
+    this.pythonServerRequests.forEach((pending) => {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    });
+    this.pythonServerRequests.clear();
+  }
+
+  async callPersistentPythonMediaPipe(imagePath) {
+    this.startPythonServer();
+
+    if (!this.pythonServer || !this.pythonServer.stdin.writable) {
+      throw new Error('MediaPipe server is not writable');
+    }
+
+    return new Promise((resolve, reject) => {
+      const id = ++this.pythonServerRequestId;
+      const timeout = setTimeout(() => {
+        this.pythonServerRequests.delete(id);
+        if (this.pythonServer) {
+          this.pythonServer.kill();
+          this.pythonServer = null;
+        }
+        reject(new Error(`MediaPipe process timeout after ${this.detectionTimeoutMs}ms`));
+      }, this.detectionTimeoutMs);
+
+      this.pythonServerRequests.set(id, { resolve, reject, timeout });
+
+      const request = JSON.stringify({ id, imagePath }) + '\n';
+      this.pythonServer.stdin.write(request, (error) => {
+        if (error) {
+          clearTimeout(timeout);
+          this.pythonServerRequests.delete(id);
+          reject(error);
+        }
+      });
+    });
+  }
+
   /**
    * Parse the JSON response from the Python MediaPipe script
    */
@@ -229,6 +346,10 @@ class PoseDetectionService {
 
     try {
       const result = await this.callPythonMediaPipe(imagePath);
+
+      if (result.success === false) {
+        throw new Error(result.error || 'MediaPipe detection failed');
+      }
       
       if (result.success && result.detected) {
         this.usingFallback = false;
@@ -251,9 +372,16 @@ class PoseDetectionService {
       }
     } catch (error) {
       console.error('MediaPipe detection error:', error);
-      this.initialized = false;
-      this.usingFallback = true;
-      return this.fallbackDetection(imagePath);
+      if (this.pythonServer) {
+        this.pythonServer.kill();
+        this.pythonServer = null;
+      }
+      return {
+        success: true,
+        landmarks: null,
+        message: 'Pose detection is warming up. Please hold still.',
+        method: 'mediapipe'
+      };
     }
   }
 
@@ -261,6 +389,10 @@ class PoseDetectionService {
    * Call Python MediaPipe script
    */
   async callPythonMediaPipe(imagePath) {
+    if (this.usePersistentPython) {
+      return this.callPersistentPythonMediaPipe(imagePath);
+    }
+
     const { code, output, errorOutput } = await this.runPythonMediaPipe(
       [imagePath],
       this.detectionTimeoutMs
@@ -395,10 +527,21 @@ class PoseDetectionService {
     }
 
     try {
+      const poseName = referenceTemplate.name ?
+        Object.keys(require('../utils/poseTemplates').poseTemplates).find(
+          key => require('../utils/poseTemplates').poseTemplates[key].name === referenceTemplate.name
+        ) : '';
+
+      if (poseName && poseName !== this.lastPoseName) {
+        this.resetAngleHistory();
+        this.lastPoseName = poseName;
+      }
+
       const userAngles = this.extractAngles(landmarks);
+      const normalizedAngles = this.normalizePoseAngles(userAngles, poseName);
       
       // Check if angles were successfully extracted
-      if (Object.keys(userAngles).length === 0) {
+      if (Object.keys(normalizedAngles).length === 0) {
         return {
           valid: false,
           score: 0,
@@ -416,18 +559,12 @@ class PoseDetectionService {
       }
       
       // Apply temporal smoothing to reduce jitter
-      const smoothedAngles = this.applySmoothingToAngles(userAngles);
-      
-      // Pass pose name for critical validation
-      const poseName = referenceTemplate.name ?
-        Object.keys(require('../utils/poseTemplates').poseTemplates).find(
-          key => require('../utils/poseTemplates').poseTemplates[key].name === referenceTemplate.name
-        ) : '';
+      const smoothedAngles = this.applySmoothingToAngles(normalizedAngles);
       
       const comparison = this.compareAnglesWithRanges(smoothedAngles, referenceTemplate.keyAngles, poseName);
       
       return {
-        valid: comparison.score >= 50, // More liberal threshold (was 60)
+        valid: comparison.score >= 60,
         score: comparison.score,
         feedback: comparison.feedback,
         angles: smoothedAngles,
@@ -469,9 +606,77 @@ class PoseDetectionService {
       // Calculate moving average
       const sum = this.angleHistory[key].reduce((a, b) => a + b, 0);
       smoothedAngles[key] = sum / this.angleHistory[key].length;
+
+      if (!this.angleConfidenceHistory[key]) {
+        this.angleConfidenceHistory[key] = [];
+      }
+
+      this.angleConfidenceHistory[key].push(this.lastAngleConfidences[key] || 1);
+
+      if (this.angleConfidenceHistory[key].length > this.historySize) {
+        this.angleConfidenceHistory[key].shift();
+      }
+
+      const confidenceSum = this.angleConfidenceHistory[key].reduce((a, b) => a + b, 0);
+      this.lastAngleConfidences[key] = confidenceSum / this.angleConfidenceHistory[key].length;
     });
     
     return smoothedAngles;
+  }
+
+  getLandmarkVisibility(landmark) {
+    if (!landmark) {
+      return 0;
+    }
+    return typeof landmark.visibility === 'number' ? landmark.visibility : 1;
+  }
+
+  canCalculateAngle(...points) {
+    return points.every(point => this.getLandmarkVisibility(point) >= 0.35);
+  }
+
+  calculateVisibleAngle(key, pointA, pointB, pointC, angles) {
+    if (!this.canCalculateAngle(pointA, pointB, pointC)) {
+      return;
+    }
+
+    angles[key] = this.calculateAngle(pointA, pointB, pointC);
+    this.lastAngleConfidences[key] = Math.min(
+      this.getLandmarkVisibility(pointA),
+      this.getLandmarkVisibility(pointB),
+      this.getLandmarkVisibility(pointC)
+    );
+  }
+
+  normalizePoseAngles(angles, poseName) {
+    if (!angles) {
+      return {};
+    }
+
+    const normalized = { ...angles };
+
+    if (poseName === 'vrikshasana' && angles.leftKnee !== undefined && angles.rightKnee !== undefined) {
+      const leftIsBent = angles.leftKnee < angles.rightKnee;
+      normalized.standingKnee = leftIsBent ? angles.rightKnee : angles.leftKnee;
+      normalized.bentKnee = leftIsBent ? angles.leftKnee : angles.rightKnee;
+      this.lastAngleConfidences.standingKnee = leftIsBent
+        ? this.lastAngleConfidences.rightKnee
+        : this.lastAngleConfidences.leftKnee;
+      this.lastAngleConfidences.bentKnee = leftIsBent
+        ? this.lastAngleConfidences.leftKnee
+        : this.lastAngleConfidences.rightKnee;
+
+      if (leftIsBent && angles.leftHip !== undefined && angles.rightHip !== undefined) {
+        const standingHipConfidence = this.lastAngleConfidences.rightHip;
+        const bentHipConfidence = this.lastAngleConfidences.leftHip;
+        normalized.leftHip = angles.rightHip;
+        normalized.rightHip = angles.leftHip;
+        this.lastAngleConfidences.leftHip = standingHipConfidence;
+        this.lastAngleConfidences.rightHip = bentHipConfidence;
+      }
+    }
+
+    return normalized;
   }
 
   /**
@@ -479,41 +684,23 @@ class PoseDetectionService {
    */
   extractAngles(landmarks) {
     const angles = {};
+    this.lastAngleConfidences = {};
 
     try {
-      angles.leftKnee = this.calculateAngle(
-        landmarks[23], landmarks[25], landmarks[27]
-      );
-
-      angles.rightKnee = this.calculateAngle(
-        landmarks[24], landmarks[26], landmarks[28]
-      );
-
-      angles.leftElbow = this.calculateAngle(
-        landmarks[11], landmarks[13], landmarks[15]
-      );
-
-      angles.rightElbow = this.calculateAngle(
-        landmarks[12], landmarks[14], landmarks[16]
-      );
-
-      angles.leftHip = this.calculateAngle(
-        landmarks[11], landmarks[23], landmarks[25]
-      );
-
-      angles.rightHip = this.calculateAngle(
-        landmarks[12], landmarks[24], landmarks[26]
-      );
-
-      angles.leftShoulder = this.calculateAngle(
-        landmarks[23], landmarks[11], landmarks[13]
-      );
-
-      angles.rightShoulder = this.calculateAngle(
-        landmarks[24], landmarks[12], landmarks[14]
-      );
+      this.calculateVisibleAngle('leftKnee', landmarks[23], landmarks[25], landmarks[27], angles);
+      this.calculateVisibleAngle('rightKnee', landmarks[24], landmarks[26], landmarks[28], angles);
+      this.calculateVisibleAngle('leftElbow', landmarks[11], landmarks[13], landmarks[15], angles);
+      this.calculateVisibleAngle('rightElbow', landmarks[12], landmarks[14], landmarks[16], angles);
+      this.calculateVisibleAngle('leftHip', landmarks[11], landmarks[23], landmarks[25], angles);
+      this.calculateVisibleAngle('rightHip', landmarks[12], landmarks[24], landmarks[26], angles);
+      this.calculateVisibleAngle('leftShoulder', landmarks[23], landmarks[11], landmarks[13], angles);
+      this.calculateVisibleAngle('rightShoulder', landmarks[24], landmarks[12], landmarks[14], angles);
 
       // Spine angle
+      if (!this.canCalculateAngle(landmarks[11], landmarks[12], landmarks[23], landmarks[24])) {
+        return angles;
+      }
+
       const midShoulder = {
         x: (landmarks[11].x + landmarks[12].x) / 2,
         y: (landmarks[11].y + landmarks[12].y) / 2
@@ -528,6 +715,12 @@ class PoseDetectionService {
         midHip.y - midShoulder.y
       ) * (180 / Math.PI);
       angles.spine = 180 - Math.abs(spineAngle);
+      this.lastAngleConfidences.spine = Math.min(
+        this.getLandmarkVisibility(landmarks[11]),
+        this.getLandmarkVisibility(landmarks[12]),
+        this.getLandmarkVisibility(landmarks[23]),
+        this.getLandmarkVisibility(landmarks[24])
+      );
 
     } catch (error) {
       console.error('Error extracting angles:', error);
@@ -660,6 +853,16 @@ class PoseDetectionService {
         const targetAngle = reference.angle;
         const tolerance = reference.tolerance || 15;
         const weight = jointWeights[key] || 1.0;
+        const confidence = this.lastAngleConfidences[key] || 1;
+
+        if (confidence < 0.35) {
+          feedback.push({
+            joint: key,
+            message: `${this.formatJointName(key)} is not clear in camera`,
+            severity: 'medium',
+          });
+          return;
+        }
 
         // Calculate angle difference
         const diff = Math.abs(userAngle - targetAngle);
@@ -677,35 +880,36 @@ class PoseDetectionService {
         let status = 'poor';
         
         if (userAngle >= minPerfect && userAngle <= maxPerfect) {
-          // Perfect range: 85-100 points (within 30% of tolerance)
-          angleScore = 85 + (15 * (1 - (diff / (tolerance * 0.3))));
+          // Perfect range: 90-100 points (within 30% of tolerance)
+          angleScore = 90 + (10 * (1 - (diff / (tolerance * 0.3))));
           status = 'perfect';
         } else if (userAngle >= minGood && userAngle <= maxGood) {
-          // Good range: 70-85 points (within 60% of tolerance)
+          // Good range: 75-90 points (within 60% of tolerance)
           const goodDiff = Math.min(
             Math.abs(userAngle - minGood),
             Math.abs(userAngle - maxGood)
           );
-          angleScore = 70 + (15 * (1 - (goodDiff / (tolerance * 0.4))));
+          angleScore = 75 + (15 * (1 - (goodDiff / (tolerance * 0.4))));
           status = 'good';
         } else if (userAngle >= minAcceptable && userAngle <= maxAcceptable) {
-          // Acceptable range: 55-70 points (within full tolerance)
+          // Acceptable range: 55-75 points (within full tolerance)
           const acceptableDiff = Math.min(
             Math.abs(userAngle - minAcceptable),
             Math.abs(userAngle - maxAcceptable)
           );
-          angleScore = 55 + (15 * (1 - (acceptableDiff / tolerance)));
+          angleScore = 55 + (20 * (1 - (acceptableDiff / tolerance)));
           status = 'acceptable';
         } else {
           // Outside acceptable range: 0-55 points (gradual penalty)
           const excessDiff = diff - tolerance;
-          angleScore = Math.max(0, 55 - (excessDiff * 1.5));
+          angleScore = Math.max(0, 55 - (excessDiff * 2.5));
           status = 'needs_adjustment';
         }
 
         // Apply weight to score
-        weightedScore += angleScore * weight;
-        totalWeight += weight;
+        const confidenceWeight = Math.max(0.5, Math.min(confidence, 1));
+        weightedScore += angleScore * weight * confidenceWeight;
+        totalWeight += weight * confidenceWeight;
         totalScore += angleScore;
         count++;
 
@@ -715,6 +919,7 @@ class PoseDetectionService {
           target: targetAngle,
           diff: Math.round(diff),
           score: Math.round(angleScore),
+          confidence: Math.round(confidence * 100),
           status: status,
           range: `${Math.round(minAcceptable)}-${Math.round(maxAcceptable)}°`
         };
@@ -744,6 +949,25 @@ class PoseDetectionService {
         }
       }
     });
+
+    const minimumRequiredJoints = Math.min(3, Math.ceil(Object.keys(referenceAngles).length * 0.6));
+    if (count < minimumRequiredJoints) {
+      return {
+        score: 0,
+        averageScore: 0,
+        feedback: [{
+          joint: 'visibility',
+          message: 'Move back or improve lighting so more body joints are visible',
+          severity: 'high'
+        }],
+        feedbackSummary: {
+          overall: 'Not enough body joints visible',
+          details: feedback
+        },
+        angleDetails,
+        jointsAnalyzed: count
+      };
+    }
 
     // Calculate final scores
     const averageScore = count > 0 ? totalScore / count : 0;
@@ -864,18 +1088,26 @@ class PoseDetectionService {
    */
   resetAngleHistory() {
     this.angleHistory = {};
+    this.angleConfidenceHistory = {};
   }
 
   /**
    * Clean up resources
    */
   async cleanup() {
+    if (this.pythonServer) {
+      this.pythonServer.kill();
+      this.pythonServer = null;
+    }
+    this.rejectAllPythonServerRequests(new Error('Pose detection service cleaned up'));
     this.initialized = false;
     this.initializationAttempted = false;
     this.initializationPromise = null;
     this.usingFallback = false;
     this.hasLoggedFallback = false;
     this.angleHistory = {};
+    this.angleConfidenceHistory = {};
+    this.lastAngleConfidences = {};
     console.log('Pose detection service cleaned up');
   }
 }

@@ -83,6 +83,7 @@ export default function YogaSessionScreen({ route, navigation }) {
   const completionInProgress = useRef(false);
   const latestPoseScore = useRef(0);
   const latestFeedback = useRef({ overall: "Watch the video to learn the pose", details: [] });
+  const scoreHistoryRef = useRef([]);
 
   /* ===============================
      CAMERA PERMISSION
@@ -103,6 +104,7 @@ export default function YogaSessionScreen({ route, navigation }) {
       setPoseCompleted(false);
       setPoseScore(0);
       setScoreHistory([]);
+      scoreHistoryRef.current = [];
       setVideoWatched(false);
       setSessionStarted(false);
       setShowReadyModal(false);
@@ -216,11 +218,12 @@ export default function YogaSessionScreen({ route, navigation }) {
   const startLiveTracking = () => {
     clearTrackingIntervals();
 
-    // Process frames every 3 seconds to reduce shutter sound frequency
-    // This is a compromise between real-time feedback and user experience
+    captureAndAnalyzePose();
+
+    // Process frames frequently; backend keeps MediaPipe warm in a persistent process.
     processingInterval.current = setInterval(() => {
       captureAndAnalyzePose();
-    }, 3000); // Increased from 1.5s to 3s
+    }, 1200);
 
     // Check pose hold every second
     holdCheckInterval.current = setInterval(() => {
@@ -245,7 +248,7 @@ export default function YogaSessionScreen({ route, navigation }) {
 
     // Throttle processing to avoid overwhelming
     const now = Date.now();
-    if (now - lastProcessTime.current < 1000) return;
+    if (now - lastProcessTime.current < 800) return;
     lastProcessTime.current = now;
 
     isProcessingRef.current = true;
@@ -256,7 +259,7 @@ export default function YogaSessionScreen({ route, navigation }) {
       // Note: Expo Camera doesn't support muting shutter sound on all devices
       // The sound is controlled by device system settings
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.3, // Lower quality for faster capture
+        quality: 0.5,
         base64: false,
         skipProcessing: true,
         exif: false,
@@ -266,8 +269,8 @@ export default function YogaSessionScreen({ route, navigation }) {
       // Resize image for faster processing
       const resizedPhoto = await ImageManipulator.manipulateAsync(
         photo.uri,
-        [{ resize: { width: 480 } }], // Smaller for faster processing
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 640 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
       );
 
       // Send to backend for pose detection
@@ -303,12 +306,15 @@ export default function YogaSessionScreen({ route, navigation }) {
 
       if (data.success && data.detected && data.validation) {
         const newScore = data.validation.score;
-        const smoothedScore = scoreHistory.length > 0 
-          ? smoothScore(poseScore, newScore, 0.7)
+        const smoothedScore = scoreHistoryRef.current.length > 0
+          ? smoothScore(latestPoseScore.current, newScore, 0.45)
           : newScore;
 
         setPoseScore(smoothedScore);
-        setScoreHistory(prev => [...prev, smoothedScore].slice(-5));
+        latestPoseScore.current = smoothedScore;
+        const updatedScoreHistory = [...scoreHistoryRef.current, smoothedScore].slice(-5);
+        scoreHistoryRef.current = updatedScoreHistory;
+        setScoreHistory(updatedScoreHistory);
 
         // Generate feedback
         const feedbackData = {
@@ -322,7 +328,7 @@ export default function YogaSessionScreen({ route, navigation }) {
 
         // Check if pose is held correctly
         if (smoothedScore >= 85 && !poseCompleted) {
-          const recentScores = [...scoreHistory, smoothedScore].slice(-3);
+          const recentScores = updatedScoreHistory.slice(-3);
           if (recentScores.length >= 3 && recentScores.every(s => s >= 85)) {
             finalizeCurrentPose({
               finalScore: smoothedScore,
