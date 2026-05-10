@@ -250,6 +250,7 @@ class PoseDetectionService {
       return;
     }
 
+    console.log('🚀 Starting MediaPipe Python server...');
     this.pythonServerBuffer = '';
     this.pythonServer = spawn(this.pythonPath, [this.scriptPath, '--server'], {
       env: this.getPythonEnv(),
@@ -279,13 +280,17 @@ class PoseDetectionService {
     });
 
     this.pythonServer.on('error', (error) => {
+      console.error('❌ MediaPipe server error:', error);
       this.rejectAllPythonServerRequests(error);
       this.pythonServer = null;
+      this.initialized = false;
     });
 
     this.pythonServer.on('close', (code) => {
+      console.log(`⚠️ MediaPipe server closed with code ${code}`);
       this.rejectAllPythonServerRequests(new Error(`MediaPipe server exited with code ${code}`));
       this.pythonServer = null;
+      // Don't set initialized to false here - let it restart on next request
     });
   }
 
@@ -327,10 +332,9 @@ class PoseDetectionService {
       const id = ++this.pythonServerRequestId;
       const timeout = setTimeout(() => {
         this.pythonServerRequests.delete(id);
-        if (this.pythonServer) {
-          this.pythonServer.kill();
-          this.pythonServer = null;
-        }
+        // DON'T kill the server on timeout - just reject this request
+        // The server might be processing other requests or just slow
+        console.warn(`⏱️ MediaPipe request ${id} timed out, but keeping server alive`);
         reject(new Error(`MediaPipe process timeout after ${this.detectionTimeoutMs}ms`));
       }, this.detectionTimeoutMs);
 
@@ -341,6 +345,7 @@ class PoseDetectionService {
         if (error) {
           clearTimeout(timeout);
           this.pythonServerRequests.delete(id);
+          console.error('❌ Failed to write to MediaPipe server:', error);
           reject(error);
         }
       });
@@ -372,13 +377,22 @@ class PoseDetectionService {
       const result = await this.callPythonMediaPipe(imagePath);
 
       if (result.success === false) {
-        throw new Error(result.error || 'MediaPipe detection failed');
+        console.warn('MediaPipe detection failed, but continuing:', result.error);
+        // Don't throw - return a "no pose detected" response instead
+        return {
+          success: true,
+          detected: false,
+          landmarks: null,
+          message: 'No pose detected. Please adjust your position.',
+          method: 'mediapipe'
+        };
       }
       
       if (result.success && result.detected) {
         this.usingFallback = false;
         return {
           success: true,
+          detected: true,
           landmarks: result.landmarks,
           imageWidth: result.imageWidth,
           imageHeight: result.imageHeight,
@@ -389,6 +403,7 @@ class PoseDetectionService {
         this.usingFallback = false;
         return {
           success: true,
+          detected: false,
           landmarks: null,
           message: result.message || 'No pose detected',
           method: 'mediapipe'
@@ -396,14 +411,18 @@ class PoseDetectionService {
       }
     } catch (error) {
       console.error('MediaPipe detection error:', error);
-      if (this.pythonServer) {
-        this.pythonServer.kill();
+      // DON'T kill the server on every error - it causes reinitialization freezing
+      // Only restart if we detect the server is truly dead
+      if (this.pythonServer && this.pythonServer.killed) {
+        console.log('🔄 Python server was killed, will restart on next request');
         this.pythonServer = null;
+        this.initialized = false;
       }
       return {
         success: true,
+        detected: false,
         landmarks: null,
-        message: 'Pose detection is warming up. Please hold still.',
+        message: 'Analyzing... Please hold your pose.',
         method: 'mediapipe'
       };
     }

@@ -239,11 +239,23 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
       }
     }, 5001);
 
-    if (!detection.success || !detection.landmarks) {
+    // Handle case where no pose detected
+    if (!detection.success || !detection.detected || !detection.landmarks) {
+      console.log('⚠️ No pose detected in image');
       return res.json({
         success: true,
         detected: false,
-        message: 'No pose detected in image',
+        message: detection.message || 'No pose detected in image',
+        validation: {
+          valid: false,
+          score: 0,
+          feedback: [{
+            joint: 'detection',
+            message: 'Position yourself in camera view',
+            severity: 'high'
+          }],
+          angles: {}
+        },
         template: {
           id: poseId,
           name: template.name,
@@ -255,15 +267,25 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
     // Validate pose
     const validation = poseDetectionService.validatePose(detection.landmarks, template);
 
+    console.log('🎯 Pose Validation Result:');
+    console.log('   - Landmarks count:', detection.landmarks?.length || 0);
+    console.log('   - Score:', validation.score);
+    console.log('   - Valid:', validation.valid);
+    console.log('   - Angles extracted:', Object.keys(validation.angles || {}).length);
+    console.log('   - Feedback items:', validation.feedback?.length || 0);
+
+    // Ensure score is a number
+    const finalScore = typeof validation.score === 'number' ? validation.score : 0;
+
     res.json({
       success: true,
       detected: true,
       landmarks: detection.landmarks,
       validation: {
         valid: validation.valid,
-        score: validation.score,
-        feedback: validation.feedback,
-        angles: validation.angles
+        score: finalScore,
+        feedback: validation.feedback || [],
+        angles: validation.angles || {}
       },
       template: {
         id: poseId,

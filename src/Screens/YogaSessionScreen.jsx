@@ -306,33 +306,45 @@ export default function YogaSessionScreen({ route, navigation }) {
 
       console.log('📊 Backend Response:', JSON.stringify(data, null, 2));
 
-      if (data.success && data.detected && data.validation) {
-        const newScore = data.validation.score;
+      if (data.success && data.validation) {
+        // Extract score and ensure it's a valid number
+        const rawScore = data.validation.score;
+        const newScore = typeof rawScore === 'number' && !isNaN(rawScore) ? rawScore : 0;
+        
         console.log('🎯 New Score:', newScore, 'Type:', typeof newScore);
         
-        const smoothedScore = scoreHistoryRef.current.length > 0
+        // Only apply smoothing if we have a valid score > 0
+        const smoothedScore = newScore > 0 && scoreHistoryRef.current.length > 0
           ? smoothScore(latestPoseScore.current, newScore, 0.45)
           : newScore;
 
         console.log('✨ Smoothed Score:', smoothedScore);
+        
+        // Update score state
         setPoseScore(smoothedScore);
         latestPoseScore.current = smoothedScore;
+        
+        // Update score history
         const updatedScoreHistory = [...scoreHistoryRef.current, smoothedScore].slice(-5);
         scoreHistoryRef.current = updatedScoreHistory;
         setScoreHistory(updatedScoreHistory);
 
-        // Generate feedback
+        // Generate feedback - handle both array and object formats
+        const feedbackArray = Array.isArray(data.validation.feedback)
+          ? data.validation.feedback
+          : [];
+        
         const feedbackData = {
-          overall: data.validation.feedback.length > 0 
-            ? data.validation.feedback[0].message 
-            : "Great form!",
-          details: data.validation.feedback,
+          overall: feedbackArray.length > 0
+            ? feedbackArray[0].message
+            : (smoothedScore >= 70 ? "Great form!" : "Adjust your position"),
+          details: feedbackArray,
           score: smoothedScore
         };
         setFeedback(feedbackData);
 
-        // Check if pose is held correctly
-        if (smoothedScore >= 85 && !poseCompleted) {
+        // Check if pose is held correctly (only if detected)
+        if (data.detected && smoothedScore >= 85 && !poseCompleted) {
           const recentScores = updatedScoreHistory.slice(-3);
           if (recentScores.length >= 3 && recentScores.every(s => s >= 85)) {
             finalizeCurrentPose({
@@ -344,9 +356,12 @@ export default function YogaSessionScreen({ route, navigation }) {
           }
         }
       } else {
-        setFeedback({ 
-          overall: "Position yourself in camera view", 
-          details: [] 
+        // Handle case where pose not detected
+        console.log('⚠️ Pose not detected or validation failed');
+        setPoseScore(0);
+        setFeedback({
+          overall: data.message || "Position yourself in camera view",
+          details: []
         });
       }
     } catch (error) {
