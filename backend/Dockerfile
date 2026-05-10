@@ -5,19 +5,19 @@
 FROM python:3.11-slim as python-builder
 
 # Install system dependencies for MediaPipe and OpenCV
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
-    libgles2-mesa \
-    libgles2-mesa-dev \
-    libegl1-mesa \
-    libegl1-mesa-dev \
-    libgl1-mesa-glx \
-    libgl1-mesa-dev \
+    libgles2 \
+    libegl1 \
+    libgl1 \
     curl \
+    ca-certificates \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Create Python virtual environment
@@ -37,7 +37,8 @@ RUN . venv/bin/activate && \
 FROM node:18-slim
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     python3 \
     python3-venv \
     libglib2.0-0 \
@@ -45,10 +46,12 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender1 \
     libgomp1 \
-    libgles2-mesa \
-    libegl1-mesa \
-    libgl1-mesa-glx \
+    libgles2 \
+    libegl1 \
+    libgl1 \
     curl \
+    ca-certificates \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
