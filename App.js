@@ -13,6 +13,8 @@ import FeedbackScreen from "./src/Screens/Feedbackscreen";
 import YogaListScreen from "./src/Screens/Yogalistscreen";
 import VideoEmotion from "./src/Screens/VideoEmotion";
 import QuestionnaireScreen from "./src/Screens/QuestionnaireScreen";
+import ProfileScreen from "./src/Screens/ProfileScreen";
+import HistoryScreen from "./src/Screens/HistoryScreen";
 
 
 const Stack = createStackNavigator();
@@ -99,6 +101,22 @@ export default function App() {
           <Stack.Screen
             name="Questionnaire"
             component={QuestionnaireScreen}
+          />
+
+          <Stack.Screen
+            name="Profile"
+            component={ProfileScreen}
+            options={{
+              title: "My Profile",
+            }}
+          />
+
+          <Stack.Screen
+            name="History"
+            component={HistoryScreen}
+            options={{
+              title: "Session History",
+            }}
           />
 
         </Stack.Navigator>

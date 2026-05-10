@@ -299,11 +299,26 @@ const startFaceAnalysis = async () => {
             </View>
           </View>
 
-          <IconButton
-            icon="logout"
-            iconColor="white"
-            onPress={handleLogout}
-          />
+          <View style={styles.headerIcons}>
+            <IconButton
+              icon="account"
+              iconColor="white"
+              size={24}
+              onPress={() => navigation.navigate('Profile')}
+            />
+            <IconButton
+              icon="history"
+              iconColor="white"
+              size={24}
+              onPress={() => navigation.navigate('History')}
+            />
+            <IconButton
+              icon="logout"
+              iconColor="white"
+              size={24}
+              onPress={handleLogout}
+            />
+          </View>
         </View>
       </LinearGradient>
 
@@ -397,6 +412,11 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  headerIcons: {
+    flexDirection: "row",
     alignItems: "center",
   },
 

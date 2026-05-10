@@ -17,6 +17,8 @@ const resolveEmotionRoute = require("./routes/resolveEmotion");
 const youtubeRoutes = require("./routes/youtube");
 const updatePoseRoute = require("./routes/updatepose");
 const poseRoutes = require("./routes/pose");
+const profileRoutes = require("./routes/profile");
+const historyRoutes = require("./routes/history");
 
 
 // ==================== APP SETUP ====================
@@ -86,6 +88,8 @@ app.use("/api/emotion", resolveEmotionRoute);
 app.use("/api/yoga", youtubeRoutes);
 app.use("/api/session", updatePoseRoute);
 app.use("/api/pose", poseRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/history", historyRoutes);
 
 
 // ✅ Health Check (for testing on mobile browser)
