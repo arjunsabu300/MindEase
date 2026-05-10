@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Text, TouchableOpacity } from 'react-native';
 import { Upload, Camera } from 'lucide-react-native';
 
-const API_URL_VIDEO = "https://mindease-iig7.onrender.com/api/emotion/video";
+const API_URL_VIDEO = "https://mindease-px7s.onrender.com/api/emotion/video";
 
 const parseJsonResponse = async (response, fallbackMessage) => {
   const raw = await response.text();

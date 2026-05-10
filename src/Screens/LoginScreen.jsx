@@ -18,7 +18,7 @@ import {
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'https://mindease-iig7.onrender.com/api';
+const API_BASE_URL = 'https://mindease-px7s.onrender.com/api';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');

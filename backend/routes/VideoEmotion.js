@@ -24,7 +24,7 @@ const upload = multer({
   }
 });
 
-const MULTIMODAL_URL = "https://mindease-iig7.onrender.com/api/emotion/multimodal";
+const MULTIMODAL_URL = "https://mindease-px7s.onrender.com/api/emotion/multimodal";
 
 const FRAME_TIMES = ["0.5", "1", "1.5", "2.2", "3"];
 
