@@ -1,23 +1,23 @@
 services:
   - type: web
     name: mindease-backend
-    env: node
+    env: docker
     region: singapore
     plan: free
     rootDirectory: backend
-    buildCommand: chmod +x render-build.sh && ./render-build.sh
-    startCommand: node server.js
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        generateValue: true
+        value: 5001
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET
         sync: false
       - key: PYTHON_PATH
-        value: /opt/render/project/src/python/venv/bin/python3
+        value: /app/python/venv/bin/python3
     autoDeploy: true
 
 # Made with Bob
