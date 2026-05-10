@@ -19,7 +19,7 @@ import { getPoseTemplate } from "../utils/poseTemplates";
 import * as ImageManipulator from 'expo-image-manipulator';
 
 const { width, height } = Dimensions.get("window");
-const API_URL = "https://mindease-euf7.onrender.com";
+const API_URL = "https://mindease-iig7.onrender.com";
 
 export default function YogaSessionScreen({ route, navigation }) {
   const { yogaPlan = [], sessionId } = route?.params || {};
