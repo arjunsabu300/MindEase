@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Provider as PaperProvider } from "react-native-paper";
 
 // Screens
+import SplashScreen from "./src/Screens/SplashScreen";
 import LoginScreen from "./src/Screens/LoginScreen";
 import RegisterScreen from "./src/Screens/RegisterScreen";
 import DashboardScreen from "./src/Screens/Dashboard";
@@ -20,6 +21,16 @@ import HistoryScreen from "./src/Screens/HistoryScreen";
 const Stack = createStackNavigator();
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  if (showSplash) {
+    return (
+      <PaperProvider>
+        <SplashScreen onFinish={() => setShowSplash(false)} />
+      </PaperProvider>
+    );
+  }
+
   return (
     <PaperProvider>
       <NavigationContainer>
