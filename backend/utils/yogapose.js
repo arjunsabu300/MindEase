@@ -21,4 +21,8 @@ module.exports = {
   neutral: [
     { id: "sukhasana", duration: 60, intensity: "low" },
   ],
+  stress:[
+    { id: "setu_bandha", duration: 60, intensity: "medium" },
+    { id: "balasana", duration: 60, intensity: "low" },
+  ],
 };
